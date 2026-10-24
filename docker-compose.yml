@@ -1,0 +1,84 @@
+# Docker Compose — SensorGuard Development Stack
+#
+# Services:
+#   api        — Fastify backend (connects to MongoDB Atlas + Upstash Redis externally)
+#   simulator  — IoT sensor data generator
+#   dashboard  — Next.js frontend (added later)
+#   datadog    — Datadog Agent (metrics, logs, traces collector)
+#
+# Note: MongoDB Atlas and Upstash Redis are cloud services.
+# We DON'T run MongoDB or Redis locally — they're accessed via
+# connection strings in .env. This reduces Docker complexity.
+#
+# Usage:
+#   docker compose up -d          # Start all services
+#   docker compose logs -f api    # Watch API logs
+#   docker compose down           # Stop everything
+
+services:
+  # ─── Datadog Agent ───────────────────────────────────────
+  # Collects metrics, logs, and traces from all containers.
+  # Must start FIRST so other services can send data to it.
+  datadog:
+    image: gcr.io/datadoghq/agent:7
+    container_name: sensorguard-datadog
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=${DD_SITE:-datadoghq.com}
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_LOGS_ENABLED=true
+      - DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL=true
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_CONTAINER_LABELS_AS_TAGS=true
+      - DD_PROCESS_AGENT_ENABLED=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    ports:
+      - "8126:8126"   # APM traces
+      - "8125:8125/udp"  # DogStatsD metrics
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "agent health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ─── SensorGuard API ────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    container_name: sensorguard-api
+    env_file: .env
+    environment:
+      - DD_AGENT_HOST=datadog
+      - DD_TRACE_AGENT_URL=http://datadog:8126
+      - DD_SERVICE=sensorguard-api
+      - DD_ENV=${DD_ENV:-development}
+      - NODE_ENV=production
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      datadog:
+        condition: service_healthy
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "sensorguard-api"}]'
+    restart: unless-stopped
+
+  # ─── IoT Sensor Simulator ──────────────────────────────
+  simulator:
+    build:
+      context: .
+      dockerfile: packages/simulator/Dockerfile
+    container_name: sensorguard-simulator
+    env_file: .env
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:3001
+    depends_on:
+      - api
+    labels:
+      com.datadoghq.ad.logs: '[{"source": "nodejs", "service": "sensorguard-simulator"}]'
+    restart: unless-stopped

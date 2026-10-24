@@ -1,0 +1,21 @@
+{
+  "name": "@sensorguard/simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IoT Sensor Simulator — Generates synthetic sensor data and failure scenarios",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "dev:scenario": "tsx src/scenarios/overheat.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "tsx": "^4.19.4",
+    "@types/node": "^22.15.3"
+  }
+}
