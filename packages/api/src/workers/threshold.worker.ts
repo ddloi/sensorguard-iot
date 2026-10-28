@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { getRedisConnection } from '../config/redis';
+import { createRedisConnection } from '../config/redis';
 import { Threshold, Alert } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, startTimer } from '../config/datadog';
@@ -24,7 +24,7 @@ interface ThresholdJobData {
  * while ensuring no threshold violation is missed.
  */
 export function startThresholdWorker(): Worker {
-  const connection = getRedisConnection();
+  const connection = createRedisConnection();
 
   const worker = new Worker<ThresholdJobData>(
     'threshold-check',
@@ -47,20 +47,31 @@ export function startThresholdWorker(): Worker {
 
         if (!threshold) continue;
 
-        // Check CRITICAL threshold
-        if (
-          threshold.critical.max !== null &&
-          reading.value > threshold.critical.max
-        ) {
+        // Check CRITICAL threshold (both max and min)
+        const isCriticalMax = threshold.critical.max !== null && reading.value >= threshold.critical.max;
+        const isCriticalMin = threshold.critical.min !== null && reading.value <= threshold.critical.min;
+
+        if (isCriticalMax || isCriticalMin) {
+          const thresholdValue = isCriticalMax ? threshold.critical.max! : threshold.critical.min!;
+          const debounceWindow = Math.floor(Date.now() / 10000); // 10s deduplication window
           const { alertQueue } = getQueues();
-          await alertQueue.add('critical-alert', {
-            deviceId,
-            sensorType: reading.sensorType,
-            value: reading.value,
-            thresholdValue: threshold.critical.max,
-            severity: 'critical',
-            timestamp: reading.timestamp,
-          });
+
+          await alertQueue.add(
+            'critical-alert',
+            {
+              deviceId,
+              sensorType: reading.sensorType,
+              value: reading.value,
+              thresholdValue,
+              severity: 'critical',
+              timestamp: reading.timestamp,
+            },
+            {
+              jobId: `alert-${deviceId}-${reading.sensorType}-critical-${debounceWindow}`,
+              removeOnComplete: 100,
+              removeOnFail: 50,
+            },
+          );
 
           datadogMetrics.increment('sensor.threshold.exceeded', 1, [
             `device:${deviceId}`,
@@ -72,29 +83,42 @@ export function startThresholdWorker(): Worker {
             deviceId,
             sensorType: reading.sensorType,
             value: reading.value,
-            threshold: threshold.critical.max,
+            threshold: thresholdValue,
           });
         }
-        // Check WARNING threshold
-        else if (
-          threshold.warning.max !== null &&
-          reading.value > threshold.warning.max
-        ) {
-          const { alertQueue } = getQueues();
-          await alertQueue.add('warning-alert', {
-            deviceId,
-            sensorType: reading.sensorType,
-            value: reading.value,
-            thresholdValue: threshold.warning.max,
-            severity: 'warning',
-            timestamp: reading.timestamp,
-          });
+        // Check WARNING threshold (both max and min)
+        else {
+          const isWarningMax = threshold.warning.max !== null && reading.value >= threshold.warning.max;
+          const isWarningMin = threshold.warning.min !== null && reading.value <= threshold.warning.min;
 
-          datadogMetrics.increment('sensor.threshold.exceeded', 1, [
-            `device:${deviceId}`,
-            `sensor_type:${reading.sensorType}`,
-            `severity:warning`,
-          ]);
+          if (isWarningMax || isWarningMin) {
+            const thresholdValue = isWarningMax ? threshold.warning.max! : threshold.warning.min!;
+            const debounceWindow = Math.floor(Date.now() / 10000);
+            const { alertQueue } = getQueues();
+
+            await alertQueue.add(
+              'warning-alert',
+              {
+                deviceId,
+                sensorType: reading.sensorType,
+                value: reading.value,
+                thresholdValue,
+                severity: 'warning',
+                timestamp: reading.timestamp,
+              },
+              {
+                jobId: `alert-${deviceId}-${reading.sensorType}-warning-${debounceWindow}`,
+                removeOnComplete: 100,
+                removeOnFail: 50,
+              },
+            );
+
+            datadogMetrics.increment('sensor.threshold.exceeded', 1, [
+              `device:${deviceId}`,
+              `sensor_type:${reading.sensorType}`,
+              `severity:warning`,
+            ]);
+          }
         }
       }
 

@@ -1,0 +1,244 @@
+{
+  "title": "SensorGuard — Industrial IoT Operations Center",
+  "description": "Real-time monitoring dashboard for SensorGuard. Tracks sensor telemetry, incident lifecycle, auto-remediation performance, and API health. Built for MongoDB × Datadog Hackathon 2026.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "development"
+    },
+    {
+      "name": "service",
+      "prefix": "service",
+      "default": "sensorguard-api"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "group",
+        "title": "🏭 Fleet Overview",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Online Devices",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.devices.online{env:$env}",
+                  "aggregator": "last"
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Critical Alerts (Active)",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.incidents.critical{env:$env}",
+                  "aggregator": "last",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 0, "palette": "white_on_red" },
+                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
+                  ]
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Open Incidents",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.incidents.open{env:$env}",
+                  "aggregator": "last",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 0, "palette": "white_on_yellow" },
+                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
+                  ]
+                }
+              ],
+              "precision": 0,
+              "text_align": "center"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "📡 Sensor Telemetry Ingestion Rate",
+        "requests": [
+          {
+            "q": "sum:sensorguard.ingest.received{env:$env}.as_rate()",
+            "display_type": "line",
+            "style": { "palette": "cool", "line_type": "solid", "line_width": "normal" }
+          },
+          {
+            "q": "sum:sensorguard.ingest.processed{env:$env}.as_rate()",
+            "display_type": "line",
+            "style": { "palette": "warm", "line_type": "solid", "line_width": "normal" }
+          }
+        ],
+        "yaxis": { "label": "events/sec", "min": "0" },
+        "markers": [
+          {
+            "value": "y > 100",
+            "display_type": "warning dashed",
+            "label": "High Load Threshold"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "🌡️ Temperature — MOTOR-001 (Demo Target)",
+        "requests": [
+          {
+            "q": "avg:sensorguard.sensor.temperature{device:motor-001,env:$env}",
+            "display_type": "line",
+            "style": { "palette": "orange", "line_type": "solid", "line_width": "thick" }
+          }
+        ],
+        "yaxis": { "label": "°C", "min": "0", "max": "120" },
+        "markers": [
+          {
+            "value": "y = 75",
+            "display_type": "warning dashed",
+            "label": "Warning Threshold (75°C)"
+          },
+          {
+            "value": "y = 85",
+            "display_type": "error dashed",
+            "label": "Critical Threshold (85°C)"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "🚨 Incident Lifecycle (Open vs Resolved)",
+        "requests": [
+          {
+            "q": "sum:sensorguard.incidents.open{env:$env}",
+            "display_type": "bars",
+            "style": { "palette": "warm" }
+          },
+          {
+            "q": "sum:sensorguard.incidents.resolved{env:$env}.as_count()",
+            "display_type": "bars",
+            "style": { "palette": "cool" }
+          }
+        ],
+        "yaxis": { "min": "0" }
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "🔧 Auto-Remediation Execution",
+        "requests": [
+          {
+            "q": "sum:sensorguard.remediation.executed{env:$env}.as_count()",
+            "display_type": "bars",
+            "style": { "palette": "purple" }
+          },
+          {
+            "q": "avg:sensorguard.remediation.duration_ms{env:$env}",
+            "display_type": "line",
+            "style": { "palette": "grey", "line_type": "dashed" }
+          }
+        ],
+        "yaxis": { "label": "count / ms" }
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "⚡ API Latency (p50 / p95 / p99)",
+        "requests": [
+          {
+            "q": "avg:sensorguard.api.latency.p50{env:$env}",
+            "display_type": "line",
+            "style": { "palette": "cool", "line_type": "solid" }
+          },
+          {
+            "q": "avg:sensorguard.api.latency.p95{env:$env}",
+            "display_type": "line",
+            "style": { "palette": "warm", "line_type": "dashed" }
+          },
+          {
+            "q": "avg:sensorguard.api.latency.p99{env:$env}",
+            "display_type": "line",
+            "style": { "palette": "warm", "line_type": "dotted" }
+          }
+        ],
+        "yaxis": { "label": "ms", "min": "0" },
+        "markers": [
+          {
+            "value": "y > 500",
+            "display_type": "error dashed",
+            "label": "SLO Breach (500ms)"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "📦 BullMQ Queue Depth",
+        "requests": [
+          {
+            "q": "sum:sensorguard.queue.threshold_check.waiting{env:$env}",
+            "display_type": "area",
+            "style": { "palette": "cool" }
+          },
+          {
+            "q": "sum:sensorguard.queue.alert_process.waiting{env:$env}",
+            "display_type": "area",
+            "style": { "palette": "warm" }
+          },
+          {
+            "q": "sum:sensorguard.queue.remediation.waiting{env:$env}",
+            "display_type": "area",
+            "style": { "palette": "purple" }
+          }
+        ],
+        "yaxis": { "label": "jobs", "min": "0" }
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "🔄 Self-Healing Loop Duration (End-to-End)",
+        "requests": [
+          {
+            "q": "avg:sensorguard.selfhealing.total_duration_ms{env:$env}",
+            "display_type": "line",
+            "style": { "palette": "green", "line_type": "solid", "line_width": "thick" }
+          }
+        ],
+        "yaxis": { "label": "ms", "min": "0" },
+        "markers": [
+          {
+            "value": "y > 30000",
+            "display_type": "warning dashed",
+            "label": "Target SLA: 30s recovery"
+          }
+        ]
+      }
+    }
+  ]
+}

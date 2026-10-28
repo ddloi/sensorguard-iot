@@ -3,7 +3,18 @@ import { z } from 'zod';
 import { SensorData, Device } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics } from '../config/datadog';
+import { wsManager } from '../utils/websocket';
 import { logger } from '../utils/logger';
+
+// In-memory cache for device metadata to avoid repeated DB reads on high-throughput ingest
+interface CachedDevice {
+  location: string;
+  cachedAt: number;
+}
+const deviceLocationCache = new Map<string, CachedDevice>();
+const lastSeenThrottleCache = new Map<string, number>();
+const DEVICE_CACHE_TTL_MS = 60_000; // 1 minute cache for static device location
+const LAST_SEEN_THROTTLE_MS = 15_000; // Throttle lastSeen updates to once every 15s per device
 
 /**
  * INGEST ROUTE — The heart of SensorGuard.
@@ -49,11 +60,17 @@ export async function ingestRoutes(fastify: FastifyInstance) {
     const now = new Date();
 
     try {
-      // 1. Fetch device to get location info
-      const device = await Device.findById(deviceId).lean();
-      if (!device) {
-        return reply.status(404).send({ error: `Device ${deviceId} not found` });
+      // 1. Fetch device to get location info (with 60s memory cache to avoid DB hit per packet)
+      let cached = deviceLocationCache.get(deviceId);
+      if (!cached || Date.now() - cached.cachedAt > DEVICE_CACHE_TTL_MS) {
+        const device = await Device.findById(deviceId).lean();
+        if (!device) {
+          return reply.status(404).send({ error: `Device ${deviceId} not found` });
+        }
+        cached = { location: device.location, cachedAt: Date.now() };
+        deviceLocationCache.set(deviceId, cached);
       }
+      const deviceLocation = cached.location;
 
       // 2. Transform readings into Time Series documents
       const documents = readings.map((reading) => ({
@@ -61,7 +78,7 @@ export async function ingestRoutes(fastify: FastifyInstance) {
         metadata: {
           deviceId,
           sensorType: reading.sensorType,
-          location: device.location,
+          location: deviceLocation,
           unit: reading.unit,
         },
         value: reading.value,
@@ -71,20 +88,33 @@ export async function ingestRoutes(fastify: FastifyInstance) {
       // 3. Bulk insert into Time Series Collection (fast)
       await SensorData.insertMany(documents, { ordered: false });
 
-      // 4. Update device lastSeen
-      await Device.updateOne(
-        { _id: deviceId },
-        { $set: { lastSeen: now } },
-      );
+      // 4. Throttled update of device lastSeen (max once every 15s)
+      const lastSeenTime = lastSeenThrottleCache.get(deviceId) || 0;
+      if (Date.now() - lastSeenTime > LAST_SEEN_THROTTLE_MS) {
+        lastSeenThrottleCache.set(deviceId, Date.now());
+        Device.updateOne(
+          { _id: deviceId },
+          { $set: { lastSeen: now } },
+        ).catch((err) => {
+          logger.warn('Failed to update device lastSeen', { deviceId, error: err.message });
+        });
+      }
 
       // 5. Send current values to Datadog as gauge metrics
       for (const reading of readings) {
         datadogMetrics.gauge('sensor.reading.value', reading.value, [
           `device:${deviceId}`,
           `sensor_type:${reading.sensorType}`,
-          `location:${device.location}`,
+          `location:${deviceLocation}`,
         ]);
       }
+
+      // Broadcast live telemetry to connected WebSocket clients
+      wsManager.broadcast('telemetry', {
+        deviceId,
+        readings,
+        timestamp: now.toISOString(),
+      });
 
       // 6. Dispatch async threshold check via BullMQ
       const { thresholdQueue } = getQueues();
@@ -95,7 +125,7 @@ export async function ingestRoutes(fastify: FastifyInstance) {
           readings: readings.map((r) => ({
             ...r,
             timestamp: now.toISOString(),
-            location: device.location,
+            location: deviceLocation,
           })),
         },
         {

@@ -1,7 +1,9 @@
 import { Worker, Job } from 'bullmq';
-import { getRedisConnection } from '../config/redis';
+import { createRedisConnection } from '../config/redis';
 import { Device, Incident, Alert } from '../models';
+import { getQueues } from '../queues';
 import { datadogMetrics, sendDatadogLog, startTimer } from '../config/datadog';
+import { wsManager } from '../utils/websocket';
 import { logger } from '../utils/logger';
 
 interface RemediationJobData {
@@ -10,17 +12,19 @@ interface RemediationJobData {
   value: number;
   incidentId: string;
   alertId: string;
+  remediationAction?: string;
+  rootCause?: string;
 }
 
 /**
  * RemediationWorker: Executes auto-fix actions for critical alerts.
- * 
- * In a real system, this would send commands to the IoT device.
- * In this demo, it simulates the remediation and updates the
- * incident timeline to show the full Detect → Investigate → Respond cycle.
+ *
+ * Uses a non-blocking 2-stage event state machine via BullMQ:
+ * Stage 1 ('auto-remediate'): Initiates mitigation, sets safe mode, schedules delayed verification.
+ * Stage 2 ('verify-recovery'): Verifies recovery, resolves incident, restores device to online.
  */
 export function startRemediationWorker(): Worker {
-  const connection = getRedisConnection();
+  const connection = createRedisConnection();
 
   const worker = new Worker<RemediationJobData>(
     'remediation',
@@ -28,155 +32,178 @@ export function startRemediationWorker(): Worker {
       const endTimer = startTimer();
       const { deviceId, sensorType, value, incidentId, alertId } = job.data;
 
-      logger.info('Remediation started', { deviceId, sensorType, incidentId });
+      // ─── STAGE 1: INITIATE MITIGATION ─────────────────────────────────
+      if (job.name === 'auto-remediate') {
+        logger.info('Remediation started (Stage 1: Mitigation)', { deviceId, sensorType, incidentId });
 
-      // 1. Update incident timeline: investigation started
-      await Incident.updateOne(
-        { _id: incidentId },
-        {
-          $set: { status: 'investigating' },
-          $push: {
-            timeline: {
-              timestamp: new Date(),
-              event: 'investigation_started',
-              details: `Investigating ${sensorType} anomaly on ${deviceId}. Current value: ${value}. Checking correlated sensors.`,
+        // 1. Determine root cause and remediation action
+        const rootCause = getSimulatedRootCause(sensorType);
+        const remediationAction = getSimulatedRemediation(sensorType);
+
+        // 2. Update incident: investigation & mitigating
+        await Incident.updateOne(
+          { _id: incidentId },
+          {
+            $set: {
+              status: 'mitigating',
+              rootCause,
+            },
+            $push: {
+              timeline: {
+                $each: [
+                  {
+                    timestamp: new Date(),
+                    event: 'investigation_started' as const,
+                    details: `Investigating ${sensorType} anomaly on ${deviceId}. Current value: ${value}. Checking correlated sensors.`,
+                  },
+                  {
+                    timestamp: new Date(),
+                    event: 'remediation_triggered' as const,
+                    details: `Auto-remediation: ${remediationAction}`,
+                  },
+                ],
+              },
             },
           },
-        },
-      );
+        );
 
-      // Simulate investigation delay (2 seconds)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+        // 3. Update device status to maintenance/cooling
+        await Device.updateOne(
+          { _id: deviceId },
+          { $set: { status: 'maintenance' } },
+        );
 
-      // 2. Determine root cause and remediation action
-      const rootCause = getSimulatedRootCause(sensorType);
-      const remediationAction = getSimulatedRemediation(sensorType);
+        wsManager.broadcast('device_status', { deviceId, status: 'maintenance' });
+        wsManager.broadcast('incident', { action: 'mitigating', incidentId });
 
-      // 3. Update incident: remediation triggered
-      await Incident.updateOne(
-        { _id: incidentId },
-        {
-          $set: {
-            status: 'mitigating',
+        datadogMetrics.increment('remediation.executed', 1, [
+          `device:${deviceId}`,
+          `sensor_type:${sensorType}`,
+          `action:${remediationAction.substring(0, 30)}`,
+        ]);
+
+        logger.info('Remediation action triggered, scheduling delayed verification', {
+          deviceId,
+          action: remediationAction,
+        });
+
+        // 4. Schedule Stage 2 via BullMQ delayed job (non-blocking, frees worker thread immediately)
+        const { remediationQueue } = getQueues();
+        await remediationQueue.add(
+          'verify-recovery',
+          {
+            deviceId,
+            sensorType,
+            value,
+            incidentId,
+            alertId,
+            remediationAction,
             rootCause,
           },
-          $push: {
-            timeline: {
-              timestamp: new Date(),
-              event: 'remediation_triggered',
-              details: `Auto-remediation: ${remediationAction}`,
+          {
+            delay: 8000, // 8-second realistic cooling/recovery window
+            jobId: `verify-${incidentId}`,
+            removeOnComplete: 100,
+            removeOnFail: 50,
+          },
+        );
+
+        endTimer('queue.job.duration', { queue: 'remediation', stage: 'mitigate' });
+        return;
+      }
+
+      // ─── STAGE 2: VERIFY RECOVERY & RESOLVE ───────────────────────────
+      if (job.name === 'verify-recovery') {
+        const remediationAction = job.data.remediationAction || getSimulatedRemediation(sensorType);
+        logger.info('Remediation verifying recovery (Stage 2: Resolution)', { deviceId, incidentId });
+
+        const now = new Date();
+        const incident = await Incident.findById(incidentId);
+        const duration = incident
+          ? Math.round((now.getTime() - incident.createdAt.getTime()) / 1000)
+          : 8;
+
+        // 1. Resolve Incident
+        await Incident.updateOne(
+          { _id: incidentId },
+          {
+            $set: {
+              status: 'resolved',
+              resolution: remediationAction,
+              duration,
+              resolvedAt: now,
+            },
+            $push: {
+              timeline: {
+                $each: [
+                  {
+                    timestamp: new Date(now.getTime() - 2000),
+                    event: 'recovery_confirmed' as const,
+                    details: `${sensorType} values returning to normal range on ${deviceId}`,
+                  },
+                  {
+                    timestamp: now,
+                    event: 'resolved' as const,
+                    details: `Incident resolved. Duration: ${duration}s. Auto-remediation successful.`,
+                  },
+                ],
+              },
             },
           },
-        },
-      );
+        );
 
-      // 4. Update device status to maintenance/cooling
-      await Device.updateOne(
-        { _id: deviceId },
-        { $set: { status: 'maintenance' } },
-      );
-
-      logger.info('Remediation action executed', {
-        deviceId,
-        action: remediationAction,
-        rootCause,
-      });
-
-      datadogMetrics.increment('remediation.executed', 1, [
-        `device:${deviceId}`,
-        `sensor_type:${sensorType}`,
-        `action:${remediationAction.substring(0, 30)}`,
-      ]);
-
-      // 5. Simulate recovery wait (sensor values expected to drop)
-      // In a real system, we'd watch the data stream.
-      // For demo: wait 15 seconds then mark as recovered.
-      await new Promise((resolve) => setTimeout(resolve, 15000));
-
-      // 6. Mark recovery
-      const now = new Date();
-      const incident = await Incident.findById(incidentId);
-      const duration = incident
-        ? Math.round((now.getTime() - incident.createdAt.getTime()) / 1000)
-        : 0;
-
-      await Incident.updateOne(
-        { _id: incidentId },
-        {
-          $set: {
-            status: 'resolved',
-            resolution: remediationAction,
-            duration,
-            resolvedAt: now,
-          },
-          $push: {
-            timeline: {
-              $each: [
-                {
-                  timestamp: new Date(now.getTime() - 2000),
-                  event: 'recovery_confirmed' as const,
-                  details: `${sensorType} values returning to normal range on ${deviceId}`,
-                },
-                {
-                  timestamp: now,
-                  event: 'resolved' as const,
-                  details: `Incident resolved. Duration: ${duration}s. Auto-remediation successful.`,
-                },
-              ],
+        // 2. Resolve Alert
+        await Alert.updateOne(
+          { _id: alertId },
+          {
+            $set: {
+              status: 'resolved',
+              resolvedAt: now,
+              resolvedBy: 'auto',
             },
           },
-        },
-      );
+        );
 
-      // 7. Resolve alert
-      await Alert.updateOne(
-        { _id: alertId },
-        {
-          $set: {
-            status: 'resolved',
-            resolvedAt: now,
-            resolvedBy: 'auto',
-          },
-        },
-      );
+        // 3. Restore device status to online
+        await Device.updateOne(
+          { _id: deviceId },
+          { $set: { status: 'online' } },
+        );
 
-      // 8. Restore device status
-      await Device.updateOne(
-        { _id: deviceId },
-        { $set: { status: 'online' } },
-      );
+        wsManager.broadcast('device_status', { deviceId, status: 'online' });
+        wsManager.broadcast('incident', { action: 'resolved', incidentId, duration });
 
-      // 9. Metrics
-      datadogMetrics.histogram('incident.duration', duration, [
-        `device:${deviceId}`,
-        `severity:critical`,
-        `resolution:auto`,
-      ]);
+        // 4. Metrics & Logs
+        datadogMetrics.histogram('incident.duration', duration, [
+          `device:${deviceId}`,
+          `severity:critical`,
+          `resolution:auto`,
+        ]);
 
-      datadogMetrics.increment('device.status.change', 1, [
-        `device:${deviceId}`,
-        `new_status:online`,
-      ]);
+        datadogMetrics.increment('device.status.change', 1, [
+          `device:${deviceId}`,
+          `new_status:online`,
+        ]);
 
-      logger.info('Incident resolved', {
-        incidentId,
-        deviceId,
-        duration,
-        resolution: remediationAction,
-      });
+        await sendDatadogLog('info', `✅ INCIDENT RESOLVED on ${deviceId}: ${remediationAction} (Duration: ${duration}s)`, {
+          incidentId,
+          deviceId,
+          duration,
+          resolution: remediationAction,
+        });
 
-      await sendDatadogLog('info', `✅ INCIDENT RESOLVED on ${deviceId}: ${remediationAction} (Duration: ${duration}s)`, {
-        incidentId,
-        deviceId,
-        duration,
-        resolution: remediationAction,
-      });
+        logger.info('Incident resolved and device restored', {
+          incidentId,
+          deviceId,
+          duration,
+        });
 
-      endTimer('queue.job.duration', { queue: 'remediation' });
+        endTimer('queue.job.duration', { queue: 'remediation', stage: 'resolve' });
+      }
     },
     {
       connection,
-      concurrency: 2,
+      concurrency: 5, // Fully non-blocking high-throughput concurrency
     },
   );
 

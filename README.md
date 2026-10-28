@@ -1,5 +1,13 @@
 # 🛡️ SensorGuard — Industrial IoT Operations Center
 
+[![CI Pipeline](https://github.com/ddloi/sensorguard-iot/actions/workflows/ci.yml/badge.svg)](https://github.com/ddloi/sensorguard-iot/actions)
+[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
+[![Tests](https://img.shields.io/badge/Tests-32%20passed-success.svg)](https://vitest.dev/)
+[![Fastify](https://img.shields.io/badge/Fastify-5.2-black.svg)](https://fastify.dev/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Time%20Series%20%2B%20Windowing-green.svg)](https://www.mongodb.com/)
+[![Datadog](https://img.shields.io/badge/Datadog-APM%20%2B%20Metrics%20%2B%20Monitors-purple.svg)](https://www.datadoghq.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > **Real-time Industrial IoT Monitoring, Anomaly Detection & Self-Healing Architecture**  
 > Built for the **MongoDB × Datadog Hackathon 2026** (MongoDB User Group Vietnam)
 
@@ -27,11 +35,11 @@
                    │                                                                │
                    │ Aggregation Pipeline                                           ├── threshold-check
                    │ ($setWindowFields)                                             ├── alert-process
-                   │                                                                ├── remediation
+                   │                                                                ├── remediation (2-stage non-blocking)
                    ▼                                                                └── device-health
       ┌─────────────────────────┐                                                   │
       │   React + Vite SCADA    │ ◄─────────────────────────────────────────────────┘
-      │   Operations Center     │      Fetch /api/analytics + /api/incidents
+      │   Operations Center     │      WebSocket (/ws) + In-Memory Cached Analytics
       │        (:3000)          │
       └─────────────────────────┘
 ```
@@ -85,7 +93,15 @@ npm run seed
 
 ### 4. Run the Full Stack (3 Services)
 
-Open 3 terminal windows in the project root:
+**Option A — Single Terminal (Recommended):**
+Run all 3 services concurrently in one single terminal:
+
+```bash
+npm run dev
+```
+
+**Option B — Multi-Terminal:**
+If you prefer dedicated terminals for separate logs:
 
 ```bash
 # Terminal 1: Fastify Backend API (Port 3001)
@@ -121,10 +137,40 @@ You can trigger the overheat failure scenario in two ways:
 
 ---
 
+### 6. Automated Testing & Quality Assurance
+
+Run the comprehensive unit test suite covering threshold checking, sensor validation, incident state machine, remediation triggers, and windowed averages:
+
+```bash
+# Run all unit tests (27 tests across 5 test suites)
+npm test
+```
+
+---
+
+### 7. Pre-Demo Stack Verification
+
+SensorGuard includes an automated pre-flight check script to verify full-stack readiness before any live demo or presentation:
+
+```bash
+# Verify API, Database, Incidents, Analytics, and Dashboard health
+npm run verify
+```
+
+---
+
 ## 📊 Monorepo Structure
 
 ```
 sensorguard/
+├── .github/
+│   └── workflows/ci.yml      # GitHub Actions CI matrix pipeline (Node 20 & 22)
+├── datadog/
+│   ├── dashboard.json        # Exportable Datadog SCADA Dashboard (8 widgets)
+│   └── monitors.json         # Datadog Alert Monitors (SLO, temperature, ingestion)
+├── scripts/
+│   ├── verify-stack.ts       # Automated pre-demo diagnostic & health checker
+│   └── generate_docx_report.py # Automated technical report generator
 ├── packages/
 │   ├── api/                  # Fastify 5.x API, MongoDB models, BullMQ workers, Datadog tracer
 │   │   ├── src/

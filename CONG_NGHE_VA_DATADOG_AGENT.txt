@@ -1,0 +1,129 @@
+================================================================================
+           🛡️ SENSORGUARD — TỔNG HỢP CÔNG NGHỆ & GIẢI THÍCH DATADOG AGENT
+================================================================================
+Dự án: SensorGuard — Giám Sát Cảm Biến IoT & Tự Động Phục Hồi (Self-Healing)
+Đề tài: MongoDB × Datadog Hackathon 2026 (MongoDB User Group Vietnam)
+Tác giả: ddloi / SensorGuard Team
+Ngày lập: 26/10/2026
+================================================================================
+
+--------------------------------------------------------------------------------
+PHẦN 1: TOÀN BỘ CÁC CÔNG NGHỆ ĐƯỢC SỬ DỤNG TRONG DỰ ÁN
+--------------------------------------------------------------------------------
+
+1. KIẾN TRÚC & NGÔN NGỮ NỀN TẢNG (Core Architecture & Language)
+   • Monorepo Architecture: Quản lý đa gói (packages/api, packages/dashboard,
+     packages/simulator) đồng bộ qua npm workspaces.
+   • TypeScript (100% Codebase): Sử dụng TypeScript 5.8 nghiêm ngặt, đảm bảo
+     type-safety từ schema cơ sở dữ liệu, backend routes cho tới frontend React.
+   • Node.js: Môi trường thực thi JavaScript/TypeScript runtime (tương thích Node 20 & 22).
+
+2. HỆ THỐNG BACKEND & API (packages/api)
+   • Fastify 5.x: Framework web backend hiệu năng cao (throughput gấp 2-3 lần Express),
+     hỗ trợ async/await tự nhiên, tích hợp validation và chi phí overhead cực thấp.
+   • @fastify/cors & @fastify/websocket: Quản lý chia sẻ tài nguyên nguồn gốc chéo
+     và truyền dữ liệu thời gian thực hai chiều.
+   • Zod 3.x: Thư viện kiểm thực và validate schema biến môi trường (.env) và dữ liệu đầu vào.
+   • Winston 3.x: Thư viện ghi log có cấu trúc (structured logging) chuẩn production.
+   • Dotenv: Quản lý cấu hình biến môi trường đa tầng.
+
+3. CƠ SỞ DỮ LIỆU & PHÂN TÍCH CHUỖI THỜI GIAN (Database & Analytics)
+   • MongoDB Atlas Cloud: Cụm cơ sở dữ liệu NoSQL đám mây chính.
+   • MongoDB Time Series Collections: Định dạng lưu trữ tối ưu dạng cột (columnar),
+     nén dữ liệu cảm biến IoT chuỗi thời gian tốc độ cao với granularity: "seconds".
+   • MongoDB Aggregation Pipeline nâng cao:
+     - $setWindowFields: Tính toán đường trung bình trượt (Moving Average) 5 phút
+       trực tiếp trên tầng cơ sở dữ liệu để khử nhiễu cảm biến IoT thời gian thực.
+     - $dateTrunc: Gom nhóm (bucketing) dữ liệu theo khoảng thời gian tùy biến (10 giây)
+       để render biểu đồ hiệu năng cao.
+   • Mongoose 8.x: ODM quản lý schema, model (SensorData, Device, Incident, Threshold).
+
+4. HÀNG ĐỢI SỰ KIỆN & CƠ CHẾ TỰ PHỤC HỒI (Queues & Self-Healing Loop)
+   • Upstash Redis (Serverless): Hệ thống lưu trữ key-value in-memory đám mây.
+   • BullMQ 5.x: Hệ thống quản lý hàng đợi phân tán (Distributed Event Queues).
+   • Hệ thống 4 Workers chuyên trách:
+     1) threshold.worker: Kiểm tra chỉ số cảm biến vượt ngưỡng cảnh báo (Warning/Critical).
+     2) alert.worker: Tạo và cập nhật sự cố (Incidents), chống bão cảnh báo (alert storm).
+     3) remediation.worker: Tự động điều tra nguyên nhân gốc (Root Cause Analysis) và
+        kích hoạt hành động sửa chữa (giảm RPM 50%, kích hoạt chu trình làm mát khẩn cấp).
+     4) deviceHealth.worker: Giám sát nhịp tim (heartbeat) và sức khỏe tổng thể của thiết bị.
+
+5. GIAO DIỆN ĐIỀU KHIỂN SCADA (packages/dashboard)
+   • React 19: Thư viện UI hiện đại nhất xây dựng bảng điều khiển vận hành.
+   • Vite 6.x: Công cụ đóng gói (bundler) và máy chủ phát triển cực nhanh với Hot Module Replacement.
+   • SCADA NOC UI System:
+     - Thiết kế Vanilla CSS theo phong cách phòng điều khiển công nghiệp (NOC).
+     - Hiệu ứng kính mờ (Glassmorphism), ánh sáng nền (Ambient Glow), Dark/Light Tokens.
+     - Đồng hồ đo Radial Gauge SVG tùy biến thời gian thực hiển thị góc xoay giá trị.
+     - Ma trận trạng thái mạng lưới thiết bị (Fleet Topology Matrix).
+     - Nút "Demo Quá Nhiệt" 1-click kích hoạt kịch bản trực tiếp.
+
+6. BỘ GIẢ LẬP DỮ LIỆU CẢM BIẾN IOT (packages/simulator)
+   • Synthetic IoT Telemetry Engine: Sinh dữ liệu mô phỏng liên tục 5 thiết bị công nghiệp
+     (Động cơ MOTOR-001, Bơm PUMP-001, Máy nén COMP-001, Băng tải CONV-001, Máy phát GEN-001).
+   • Thuật toán phân phối chuẩn (Gaussian Noise / Box-Muller transform): Tạo độ trôi
+     nhiệt độ, độ rung, áp suất giống hệt biến động thực tế của cảm biến vật lý.
+   • Kịch bản mô phỏng lỗi (Scenario Overheat): Đẩy nhiệt độ quá ngưỡng để kích hoạt Self-Healing.
+
+7. GIÁM SÁT TOÀN DIỆN (Datadog Observability)
+   • dd-trace: Datadog APM Tracer theo dõi chi tiết latency từng route, truy vấn database.
+   • hot-shots: Thư viện Node.js UDP client kết nối gửi metrics tới DogStatsD.
+   • Datadog Dual Transport: Cơ chế tự động chuyển đổi giữa gửi UDP DogStatsD và gửi trực
+     tiếp qua Datadog Cloud HTTPS API khi không có Datadog Agent cục bộ.
+   • Datadog Dashboard JSON (datadog/dashboard.json): Cấu hình 8 widget SCADA sẵn sàng import.
+   • Datadog Monitors JSON (datadog/monitors.json): Cấu hình 5 luật cảnh báo tự động tới hạn.
+
+8. KIỂM THỬ, TỰ ĐỘNG HÓA & DEVOPS (Testing & Tooling)
+   • Vitest 3.x: Khung kiểm thử Unit Test tốc độ cao (27 tests kiểm tra toàn bộ logic).
+   • GitHub Actions (.github/workflows/ci.yml): Tự động hóa CI chạy typecheck và tests
+     trên ma trận Node 20 & 22.
+   • TSX (TypeScript Execute): Chạy TypeScript trực tiếp không cần biên dịch trước.
+   • Concurrently: Chạy đồng thời toàn bộ 3 dịch vụ hệ thống chỉ bằng 1 dòng lệnh (npm run dev).
+   • Pre-Demo Verification Script (scripts/verify-stack.ts): Chẩn đoán 6 mục trước khi demo (npm run verify).
+   • Docker & Docker Compose: Đóng gói và chạy container hóa toàn bộ hệ thống.
+   • Python-docx: Tự động xuất báo cáo so sánh kỹ thuật chuẩn định dạng Microsoft Word (.docx).
+
+
+--------------------------------------------------------------------------------
+PHẦN 2: DATADOG AGENT LÀ GÌ?
+--------------------------------------------------------------------------------
+
+1. ĐỊNH NGHĨA:
+   Datadog Agent là một phần mềm (background service/daemon) mã nguồn mở do Datadog
+   cung cấp, được cài đặt trực tiếp trên máy chủ vật lý, máy ảo (VM), hoặc chạy dưới dạng
+   container (Docker / Kubernetes).
+
+2. NHIỆM VỤ CHÍNH CỦA DATADOG AGENT:
+   Datadog Agent đóng vai trò là "người thu gom và trung chuyển dữ liệu" giữa ứng dụng của
+   bạn và đám mây Datadog (Datadog Cloud). Cụ thể bao gồm 3 chức năng:
+
+   a) DogStatsD (Thu thập Metrics):
+      - Lắng nghe các số đo (metrics) như số lượng request, nhiệt độ cảm biến, số incident
+        thông qua giao thức UDP siêu nhanh trên cổng mặc định 8125.
+      - Ứng dụng chỉ cần "bắn" gói tin UDP tới Agent mà không bị block luồng xử lý chính.
+      - Agent gom các metrics lại thành từng đợt (batching) rồi định kỳ gửi lên Datadog Cloud.
+
+   b) APM Trace Agent (Thu thập Dấu vết phân tán):
+      - Lắng nghe dữ liệu truy vết hiệu năng từ thư viện dd-trace qua cổng TCP 8126.
+      - Giúp đo đạc chính xác một API request mất bao nhiêu mili-giây tại tầng Fastify,
+        mất bao lâu tại truy vấn MongoDB, và mất bao lâu khi đẩy job vào Redis BullMQ.
+
+   c) Log Collection & Host Metrics:
+      - Tự động thu thập log ứng dụng, log container và tình trạng tài nguyên phần cứng máy chủ
+        (CPU, RAM, Disk, Network I/O) gửi về Datadog Cloud.
+
+3. VÌ SAO SENSORGUARD ĐẶC BIỆT KHI SỬ DỤNG DATADOG?
+   Trong các dự án thông thường, nếu máy tính của bạn chưa cài Datadog Agent, toàn bộ
+   metrics sẽ bị mất vì không có nơi nhận UDP port 8125.
+
+   Nhưng ở SensorGuard, hệ thống được trang bị cơ chế ĐỘC QUYỀN "DUAL TRANSPORT":
+   - Nếu máy có Datadog Agent: Gửi qua UDP DogStatsD như tiêu chuẩn Enterprise.
+   - Nếu máy KHÔNG có Datadog Agent (môi trường serverless, máy chấm thi của BGK):
+     Hệ thống tự động kích hoạt bộ đệm (buffer) và gửi trực tiếp metrics lên Datadog Cloud
+     thông qua Datadog HTTPS API bằng DD_API_KEY.
+   => Đảm bảo dù chạy ở bất kỳ máy tính nào của Ban Giám Khảo, dữ liệu giám sát Datadog
+      vẫn luôn hoạt động trơn tru 100%!
+
+================================================================================
+                      BẢN QUYỀN THUỘC VỀ SENSORGUARD TEAM
+================================================================================

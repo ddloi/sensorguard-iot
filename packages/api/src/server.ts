@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import websocket from '@fastify/websocket';
 import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initQueues, getQueues } from './queues';
@@ -12,6 +13,7 @@ import { deviceRoutes } from './routes/devices';
 import { alertRoutes } from './routes/alerts';
 import { incidentRoutes } from './routes/incidents';
 import { analyticsRoutes } from './routes/analytics';
+import { websocketRoutes } from './routes/ws';
 import { logger } from './utils/logger';
 
 /**
@@ -38,6 +40,9 @@ export async function buildServer() {
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 
+  // 1.1 WebSocket support for real-time live telemetry
+  await fastify.register(websocket);
+
   // 2. Health check
   fastify.get('/health', async () => ({
     status: 'ok',
@@ -63,6 +68,7 @@ export async function buildServer() {
   await fastify.register(alertRoutes);
   await fastify.register(incidentRoutes);
   await fastify.register(analyticsRoutes);
+  await fastify.register(websocketRoutes);
 
   // 7. Set up repeatable device health check job (every 30s)
   const { deviceHealthQueue } = getQueues();

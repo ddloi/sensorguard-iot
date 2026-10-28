@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { getRedisConnection } from '../config/redis';
+import { createRedisConnection } from '../config/redis';
 import { Device } from '../models';
 import { datadogMetrics } from '../config/datadog';
 import { logger } from '../utils/logger';
@@ -14,7 +14,7 @@ const OFFLINE_THRESHOLD_MS = 30_000; // 30 seconds without data = offline
  * reported in 30+ seconds are marked offline.
  */
 export function startDeviceHealthWorker(): Worker {
-  const connection = getRedisConnection();
+  const connection = createRedisConnection();
 
   const worker = new Worker(
     'device-health',

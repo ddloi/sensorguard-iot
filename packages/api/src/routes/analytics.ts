@@ -1,5 +1,20 @@
 import { FastifyInstance } from 'fastify';
-import { SensorData } from '../models';
+import { SensorData, Device } from '../models';
+
+// In-memory cache for fast analytics responses (reduces repeated MongoDB aggregation load)
+const analyticsCache = new Map<string, { data: unknown; expiry: number }>();
+
+function getCached<T>(key: string): T | null {
+  const item = analyticsCache.get(key);
+  if (item && item.expiry > Date.now()) {
+    return item.data as T;
+  }
+  return null;
+}
+
+function setCache<T>(key: string, data: T, ttlMs = 2500): void {
+  analyticsCache.set(key, { data, expiry: Date.now() + ttlMs });
+}
 
 /**
  * ANALYTICS ROUTES — MongoDB Aggregation Pipeline showcase.
@@ -39,6 +54,12 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
     if (!deviceId || !sensorType) {
       return reply.status(400).send({ error: 'deviceId and sensorType required' });
+    }
+
+    const cacheKey = `timeseries:${deviceId}:${sensorType}:${minutes}:${bucketSeconds}`;
+    const cached = getCached<{ deviceId: string; sensorType: string; data: unknown[] }>(cacheKey);
+    if (cached) {
+      return reply.send(cached);
     }
 
     const lookback = parseInt(minutes, 10) * 60 * 1000;
@@ -99,15 +120,23 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
     ];
 
     const data = await SensorData.aggregate(pipeline as any[]);
-    return reply.send({ deviceId, sensorType, data });
+    const result = { deviceId, sensorType, data };
+    setCache(cacheKey, result, 2500);
+    return reply.send(result);
   });
 
   /**
    * GET /api/analytics/device-health
    * Summary of all devices: latest values, counts, status.
-   * Used for the overview dashboard.
+   * Returns ALL registered devices so offline devices are not hidden.
    */
   fastify.get('/api/analytics/device-health', async (_request, reply) => {
+    const cacheKey = 'device-health:summary';
+    const cached = getCached<{ devices: unknown[] }>(cacheKey);
+    if (cached) {
+      return reply.send(cached);
+    }
+
     const pipeline = [
       {
         $match: {
@@ -166,8 +195,29 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       },
     ];
 
-    const data = await SensorData.aggregate(pipeline as any[]);
-    return reply.send({ devices: data });
+    const [allDevices, telemetryData] = await Promise.all([
+      Device.find().sort({ _id: 1 }).lean(),
+      SensorData.aggregate(pipeline as any[]),
+    ]);
+
+    const telemetryMap = new Map((telemetryData as any[]).map((d) => [d.deviceId, d]));
+
+    const combinedDevices = allDevices.map((dev) => {
+      const live = telemetryMap.get(dev._id);
+      return {
+        deviceId: dev._id,
+        name: dev.name,
+        status: dev.status,
+        location: dev.location,
+        type: dev.type,
+        sensors: live?.sensors || [],
+        lastSeen: dev.lastSeen,
+      };
+    });
+
+    const responsePayload = { devices: combinedDevices };
+    setCache(cacheKey, responsePayload, 2000);
+    return reply.send(responsePayload);
   });
 
   /**

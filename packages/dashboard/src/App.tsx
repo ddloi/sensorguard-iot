@@ -229,6 +229,7 @@ export default function App() {
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [uptimeSeconds, setUptimeSeconds] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Sync theme
   useEffect(() => {
@@ -282,9 +283,64 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 3000);
+    const pollInterval = wsConnected ? 8000 : 3000;
+    const interval = setInterval(fetchData, pollInterval);
     return () => clearInterval(interval);
-  }, [selectedDevice]);
+  }, [selectedDevice, wsConnected]);
+
+  // WebSocket Live Stream Connection
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: NodeJS.Timeout | null = null;
+
+    const connectWebSocket = () => {
+      try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          setWsConnected(true);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.event === 'device_status') {
+              setDevices((prev) =>
+                prev.map((d) =>
+                  d.deviceId === msg.data.deviceId ? { ...d, status: msg.data.status } : d
+                )
+              );
+            } else if (msg.event === 'alert' || msg.event === 'incident') {
+              fetchData();
+            }
+          } catch {
+            // ignore JSON parse error
+          }
+        };
+
+        ws.onclose = () => {
+          setWsConnected(false);
+          reconnectTimer = setTimeout(connectWebSocket, 4000);
+        };
+
+        ws.onerror = () => {
+          ws?.close();
+        };
+      } catch {
+        setWsConnected(false);
+        reconnectTimer = setTimeout(connectWebSocket, 4000);
+      }
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
+    };
+  }, []);
 
   // ─── TRIGGER OVERHEAT ────────────────────────────────────────────────
   const handleTriggerScenario = async () => {
@@ -419,6 +475,17 @@ export default function App() {
             <span className="chip__dot" style={{ background: 'var(--accent-amber)' }} />
             <Zap size={12} />
             BullMQ
+          </div>
+          <div className="chip">
+            <span
+              className="chip__dot"
+              style={{
+                background: wsConnected ? 'var(--accent-emerald)' : 'var(--accent-amber)',
+                boxShadow: wsConnected ? '0 0 6px var(--accent-emerald)' : 'none',
+              }}
+            />
+            <Radio size={12} />
+            {wsConnected ? 'WebSocket Live' : 'Polling'}
           </div>
 
           {/* Uptime */}

@@ -19,7 +19,7 @@ dotenv.config({ path: '.env' });
  * Usage: npm run dev:scenario (from packages/simulator)
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
 const TARGET_DEVICE = DEVICES.find((d) => d.id === 'MOTOR-001')!;
 
 interface Phase {

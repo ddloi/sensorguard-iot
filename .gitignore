@@ -30,9 +30,13 @@ logs/
 coverage/
 .nyc_output/
 
-# Operating System files
+# Operating System & Installer binaries
 .DS_Store
 Thumbs.db
+*.msi
+*.exe
+*.pkg
+*.dmg
 
 # IDE & Editor files
 .vscode/
