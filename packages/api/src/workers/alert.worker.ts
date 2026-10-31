@@ -17,7 +17,7 @@ interface AlertJobData {
 
 /**
  * AlertWorker: Creates alert records and triggers downstream actions.
- * 
+ *
  * On critical alerts, it also:
  * - Updates the device status
  * - Creates an incident record
@@ -83,10 +83,7 @@ export function startAlertWorker(): Worker {
 
       // 3. Update device status
       const newStatus = severity === 'critical' ? 'critical' : 'warning';
-      await Device.updateOne(
-        { _id: deviceId },
-        { $set: { status: newStatus } },
-      );
+      await Device.updateOne({ _id: deviceId }, { $set: { status: newStatus } });
 
       // Broadcast alert and device status to live clients
       wsManager.broadcast('alert', alert);

@@ -1,25 +1,21 @@
 import { DEVICES } from '../devices';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: '../../../.env' });
-dotenv.config({ path: '../../.env' });
-dotenv.config({ path: '.env' });
+import { simulatorConfig } from '../config';
 
 /**
  * OVERHEAT SCENARIO — The star of the demo.
- * 
+ *
  * This script runs the "quá nhiệt động cơ" scenario:
- * 
+ *
  * Phase 1 (0-30s):   Normal operation — all sensors within range
  * Phase 2 (30-90s):  Temperature RISING on MOTOR-001 — gradual increase
  * Phase 3 (90-120s): CRITICAL — temperature exceeds threshold
  * Phase 4 (120s+):   Wait for auto-remediation, then show RECOVERY
- * 
+ *
  * Run this AFTER the normal simulator to show the full incident lifecycle.
  * Usage: npm run dev:scenario (from packages/simulator)
  */
 
-const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
+const API_URL = simulatorConfig.apiUrl;
 const TARGET_DEVICE = DEVICES.find((d) => d.id === 'MOTOR-001')!;
 
 interface Phase {
@@ -70,11 +66,7 @@ function addNoise(base: number, noise: number): number {
   return Number((base + (Math.random() - 0.5) * 2 * noise).toFixed(2));
 }
 
-async function sendReading(
-  temp: number,
-  vibration: number,
-  rpm: number,
-): Promise<void> {
+async function sendReading(temp: number, vibration: number, rpm: number): Promise<void> {
   const readings = [
     { sensorType: 'temperature', value: temp, unit: 'celsius', quality: 'good' as const },
     { sensorType: 'vibration', value: vibration, unit: 'mm/s', quality: 'good' as const },

@@ -62,8 +62,4 @@ alertSchema.index({ deviceId: 1, status: 1, createdAt: -1 });
 // For dashboard: recent alerts sorted by time
 alertSchema.index({ status: 1, createdAt: -1 });
 
-export const Alert = mongoose.model<IAlertDocument>(
-  'Alert',
-  alertSchema,
-  'alerts',
-);
+export const Alert = mongoose.model<IAlertDocument>('Alert', alertSchema, 'alerts');

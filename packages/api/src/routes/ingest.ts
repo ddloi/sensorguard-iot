@@ -18,12 +18,12 @@ const LAST_SEEN_THROTTLE_MS = 15_000; // Throttle lastSeen updates to once every
 
 /**
  * INGEST ROUTE — The heart of SensorGuard.
- * 
+ *
  * Flow: Sensor Simulator → POST /api/ingest → MongoDB + BullMQ
- * 
+ *
  * This is the entry point for ALL sensor data. Every 5 seconds,
  * each simulated device sends a batch of readings here.
- * 
+ *
  * What happens on each request:
  * 1. Validate incoming data (zod schema)
  * 2. Insert readings into MongoDB Time Series Collection
@@ -35,14 +35,16 @@ const LAST_SEEN_THROTTLE_MS = 15_000; // Throttle lastSeen updates to once every
 // Validation schema for incoming sensor data
 const ingestSchema = z.object({
   deviceId: z.string().min(1),
-  readings: z.array(
-    z.object({
-      sensorType: z.enum(['temperature', 'vibration', 'pressure', 'rpm']),
-      value: z.number(),
-      unit: z.string(),
-      quality: z.enum(['good', 'degraded', 'bad', 'unknown']).default('good'),
-    }),
-  ).min(1),
+  readings: z
+    .array(
+      z.object({
+        sensorType: z.enum(['temperature', 'vibration', 'pressure', 'rpm']),
+        value: z.number(),
+        unit: z.string(),
+        quality: z.enum(['good', 'degraded', 'bad', 'unknown']).default('good'),
+      }),
+    )
+    .min(1),
 });
 
 export async function ingestRoutes(fastify: FastifyInstance) {
@@ -92,10 +94,7 @@ export async function ingestRoutes(fastify: FastifyInstance) {
       const lastSeenTime = lastSeenThrottleCache.get(deviceId) || 0;
       if (Date.now() - lastSeenTime > LAST_SEEN_THROTTLE_MS) {
         lastSeenThrottleCache.set(deviceId, Date.now());
-        Device.updateOne(
-          { _id: deviceId },
-          { $set: { lastSeen: now } },
-        ).catch((err) => {
+        Device.updateOne({ _id: deviceId }, { $set: { lastSeen: now } }).catch((err) => {
           logger.warn('Failed to update device lastSeen', { deviceId, error: err.message });
         });
       }
@@ -134,9 +133,7 @@ export async function ingestRoutes(fastify: FastifyInstance) {
         },
       );
 
-      datadogMetrics.increment('sensor.ingest.count', readings.length, [
-        `device:${deviceId}`,
-      ]);
+      datadogMetrics.increment('sensor.ingest.count', readings.length, [`device:${deviceId}`]);
 
       return reply.status(200).send({
         status: 'ok',

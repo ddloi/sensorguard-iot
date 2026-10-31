@@ -80,8 +80,4 @@ const incidentSchema = new Schema<IIncidentDocument>(
 // For dashboard: open incidents first, then by recency
 incidentSchema.index({ status: 1, createdAt: -1 });
 
-export const Incident = mongoose.model<IIncidentDocument>(
-  'Incident',
-  incidentSchema,
-  'incidents',
-);
+export const Incident = mongoose.model<IIncidentDocument>('Incident', incidentSchema, 'incidents');

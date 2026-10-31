@@ -1,5 +1,7 @@
 import re
 import os
+import argparse
+from pathlib import Path
 import docx
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -7,7 +9,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn, nsdecls
 
-def create_styled_document():
+def create_styled_document(output_path):
     doc = docx.Document()
 
     # Set standard 1-inch margins
@@ -418,9 +420,12 @@ def create_styled_document():
     rc2.font.color.rgb = RGBColor(20, 83, 45)
 
     # Output path
-    out_path = r"d:\Projects\Git_Projects\sensorguard\SensorGuard_Comparison_Report.docx"
+    out_path = Path(output_path).resolve()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     doc.save(out_path)
     print(f"Generated DOCX successfully at: {out_path}")
 
 if __name__ == '__main__':
-    create_styled_document()
+    parser = argparse.ArgumentParser(description='Generate the historical SensorGuard comparison report.')
+    parser.add_argument('--output', type=Path, default=Path(__file__).resolve().parents[2] / 'docs' / 'reports' / 'SensorGuard_Comparison_Report.docx')
+    create_styled_document(parser.parse_args().output)

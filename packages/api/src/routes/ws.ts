@@ -7,3 +7,4 @@ export async function websocketRoutes(fastify: FastifyInstance) {
     wsManager.addClient(socket);
   });
 }
+

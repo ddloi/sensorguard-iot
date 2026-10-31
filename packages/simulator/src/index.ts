@@ -1,27 +1,25 @@
 import { DEVICES, DeviceDefinition, SensorDefinition } from './devices';
-import dotenv from 'dotenv';
-
-dotenv.config({ path: '../../.env' });
+import { simulatorConfig } from './config';
 
 /**
  * IOT SENSOR SIMULATOR
- * 
+ *
  * Architecture overview:
  * ┌──────────────┐    HTTP POST     ┌──────────────┐
  * │  Simulator   │ ───────────────→ │  Fastify API │
  * │  (this file) │  /api/ingest     │  :3001       │
  * └──────────────┘                  └──────────────┘
- * 
+ *
  * The simulator generates realistic sensor data:
  * - Normal operation: values fluctuate within normalMin/normalMax
  * - Gaussian noise: ±5% random variation (like real sensors)
  * - Sends batch every INTERVAL_MS (default 5 seconds)
- * 
+ *
  * Each device sends its own HTTP request with all sensor readings.
  */
 
-const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:3001';
-const INTERVAL_MS = 5_000; // Send data every 5 seconds
+const API_URL = simulatorConfig.apiUrl;
+const INTERVAL_MS = simulatorConfig.intervalMs;
 
 /**
  * Generate a realistic sensor reading with Gaussian noise.
@@ -41,10 +39,7 @@ function generateNormalReading(sensor: SensorDefinition): number {
   const value = mid + gaussian * (range * 0.15);
 
   // Clamp to physical limits
-  return Math.max(
-    sensor.absoluteMin,
-    Math.min(sensor.absoluteMax, Number(value.toFixed(2))),
-  );
+  return Math.max(sensor.absoluteMin, Math.min(sensor.absoluteMax, Number(value.toFixed(2))));
 }
 
 /**
@@ -75,9 +70,7 @@ async function sendReadings(device: DeviceDefinition): Promise<void> {
 
     const temps = readings.filter((r) => r.sensorType === 'temperature');
     const tempStr = temps.length > 0 ? ` | temp=${temps[0].value}°C` : '';
-    console.log(
-      `📡 [${device.id}] Sent ${readings.length} readings${tempStr}`,
-    );
+    console.log(`📡 [${device.id}] Sent ${readings.length} readings${tempStr}`);
   } catch (error) {
     console.error(
       `❌ [${device.id}] Failed:`,

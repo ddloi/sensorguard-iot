@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'node:path';
 
-dotenv.config({ path: '../../.env' });
+// src/config and dist/config share the same depth below the repository root.
+// Environment loading must not depend on the shell's working directory.
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const envSchema = z.object({
   // MongoDB

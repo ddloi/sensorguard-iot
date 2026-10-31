@@ -1,10 +1,10 @@
 /**
  * ENTRY POINT — SensorGuard API
- * 
+ *
  * ⚠️ CRITICAL: dd-trace MUST be imported BEFORE all other modules.
  * It monkey-patches Node.js HTTP, MongoDB driver, IORedis, etc.
  * to automatically create APM traces and distributed tracing spans.
- * 
+ *
  * If dd-trace is imported after other modules, those modules
  * won't be instrumented and you'll get no traces in Datadog.
  */

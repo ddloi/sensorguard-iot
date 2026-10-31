@@ -4,18 +4,18 @@ import { logger } from '../utils/logger';
 
 /**
  * Creates an IORedis connection to Upstash Redis.
- * 
+ *
  * Upstash provides a Redis-compatible endpoint over TLS.
  * BullMQ requires IORedis instances (not node-redis).
- * 
+ *
  * Connection format: rediss://default:<token>@<endpoint>:6379
  * The "rediss://" scheme indicates TLS is required.
  */
 export function createRedisConnection(): IORedis {
   const connection = new IORedis(env.UPSTASH_REDIS_URL, {
     maxRetriesPerRequest: null, // Required by BullMQ
-    enableReadyCheck: false,     // Upstash doesn't support CLUSTER INFO
-    tls: {},                     // Required for Upstash (TLS)
+    enableReadyCheck: false, // Upstash doesn't support CLUSTER INFO
+    tls: {}, // Required for Upstash (TLS)
   });
 
   connection.on('connect', () => {

@@ -64,8 +64,4 @@ const deviceSchema = new Schema(
 deviceSchema.index({ status: 1 });
 deviceSchema.index({ location: 1 });
 
-export const Device = mongoose.model<IDeviceDocument>(
-  'Device',
-  deviceSchema,
-  'devices',
-);
+export const Device = mongoose.model<IDeviceDocument>('Device', deviceSchema, 'devices');

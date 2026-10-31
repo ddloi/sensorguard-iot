@@ -13,10 +13,7 @@ const statsd = new StatsD({
   host: process.env.DD_AGENT_HOST || 'localhost',
   port: 8125,
   prefix: 'sensorguard.',
-  globalTags: [
-    `env:${env.DD_ENV}`,
-    `service:${env.DD_SERVICE}`,
-  ],
+  globalTags: [`env:${env.DD_ENV}`, `service:${env.DD_SERVICE}`],
   errorHandler: (error) => {
     // Non-fatal, fallback to HTTP API handles delivery
   },
@@ -46,16 +43,13 @@ async function flushMetrics() {
     type: item.type,
     points: [{ timestamp: item.timestamp, value: item.value }],
     resources: [{ type: 'host', name: 'sensorguard-core' }],
-    tags: [
-      `env:${env.DD_ENV}`,
-      `service:${env.DD_SERVICE}`,
-      ...item.tags,
-    ],
+    tags: [`env:${env.DD_ENV}`, `service:${env.DD_SERVICE}`, ...item.tags],
   }));
 
   try {
     const res = await fetch(METRICS_ENDPOINT, {
       method: 'POST',
+      signal: AbortSignal.timeout(5000),
       headers: {
         'Content-Type': 'application/json',
         'DD-API-KEY': env.DD_API_KEY,
@@ -119,12 +113,17 @@ export const datadogMetrics = {
 /**
  * Send an incident/alert event log directly to Datadog Logs.
  */
-export async function sendDatadogLog(level: 'info' | 'warn' | 'error', message: string, attributes: Record<string, any> = {}) {
+export async function sendDatadogLog(
+  level: 'info' | 'warn' | 'error',
+  message: string,
+  attributes: Record<string, any> = {},
+) {
   if (!env.DD_API_KEY) return;
 
   try {
     await fetch(LOGS_ENDPOINT, {
       method: 'POST',
+      signal: AbortSignal.timeout(3000),
       headers: {
         'Content-Type': 'application/json',
         'DD-API-KEY': env.DD_API_KEY,
@@ -150,9 +149,7 @@ export function startTimer(): (metric: string, tags?: Record<string, string>) =>
   const start = Date.now();
   return (metric: string, tags?: Record<string, string>) => {
     const duration = Date.now() - start;
-    const tagArray = tags
-      ? Object.entries(tags).map(([k, v]) => `${k}:${v}`)
-      : [];
+    const tagArray = tags ? Object.entries(tags).map(([k, v]) => `${k}:${v}`) : [];
     datadogMetrics.histogram(metric, duration, tagArray);
   };
 }

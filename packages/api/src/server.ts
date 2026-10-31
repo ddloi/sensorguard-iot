@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
+import mongoose from 'mongoose';
 import { env } from './config/env';
 import { connectDatabase } from './config/database';
 import { initQueues, getQueues } from './queues';
@@ -15,10 +16,12 @@ import { incidentRoutes } from './routes/incidents';
 import { analyticsRoutes } from './routes/analytics';
 import { websocketRoutes } from './routes/ws';
 import { logger } from './utils/logger';
+import { getRedisConnection } from './config/redis';
+import { getServiceHealth } from './services/health';
 
 /**
  * SERVER SETUP — Fastify application assembly.
- * 
+ *
  * Boot sequence:
  * 1. Create Fastify instance
  * 2. Register CORS (for Next.js dashboard)
@@ -44,11 +47,24 @@ export async function buildServer() {
   await fastify.register(websocket);
 
   // 2. Health check
-  fastify.get('/health', async () => ({
-    status: 'ok',
-    service: 'sensorguard-api',
-    timestamp: new Date().toISOString(),
-  }));
+  fastify.get('/health', async (_request, reply) => {
+    const health = await getServiceHealth({
+      pingMongo: async () => {
+        if (mongoose.connection.readyState !== 1 || !mongoose.connection.db) {
+          throw new Error('MongoDB disconnected');
+        }
+        await mongoose.connection.db.admin().ping();
+      },
+      pingRedis: async () => {
+        const redis = getRedisConnection();
+        if (redis.status !== 'ready') throw new Error('Redis disconnected');
+        await redis.ping();
+      },
+      datadogConfigured: Boolean(env.DD_API_KEY),
+      uptime: process.uptime(),
+    });
+    return reply.code(health.status === 'ok' ? 200 : 503).send(health);
+  });
 
   // 3. Connect MongoDB
   await connectDatabase();

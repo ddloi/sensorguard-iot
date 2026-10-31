@@ -1,10 +1,12 @@
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../config/redis';
-import { Device, Incident, Alert } from '../models';
+import { Device, Incident, Alert, SensorData, Threshold } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, sendDatadogLog, startTimer } from '../config/datadog';
 import { wsManager } from '../utils/websocket';
 import { logger } from '../utils/logger';
+import { selectThreshold } from '../domain/threshold';
+import { isRecoveryConfirmed } from '../domain/recovery';
 
 interface RemediationJobData {
   deviceId: string;
@@ -14,6 +16,8 @@ interface RemediationJobData {
   alertId: string;
   remediationAction?: string;
   rootCause?: string;
+  verificationAttempt?: number;
+  verificationRun?: string;
 }
 
 /**
@@ -34,7 +38,11 @@ export function startRemediationWorker(): Worker {
 
       // ─── STAGE 1: INITIATE MITIGATION ─────────────────────────────────
       if (job.name === 'auto-remediate') {
-        logger.info('Remediation started (Stage 1: Mitigation)', { deviceId, sensorType, incidentId });
+        logger.info('Remediation started (Stage 1: Mitigation)', {
+          deviceId,
+          sensorType,
+          incidentId,
+        });
 
         // 1. Determine root cause and remediation action
         const rootCause = getSimulatedRootCause(sensorType);
@@ -68,10 +76,7 @@ export function startRemediationWorker(): Worker {
         );
 
         // 3. Update device status to maintenance/cooling
-        await Device.updateOne(
-          { _id: deviceId },
-          { $set: { status: 'maintenance' } },
-        );
+        await Device.updateOne({ _id: deviceId }, { $set: { status: 'maintenance' } });
 
         wsManager.broadcast('device_status', { deviceId, status: 'maintenance' });
         wsManager.broadcast('incident', { action: 'mitigating', incidentId });
@@ -115,13 +120,85 @@ export function startRemediationWorker(): Worker {
       // ─── STAGE 2: VERIFY RECOVERY & RESOLVE ───────────────────────────
       if (job.name === 'verify-recovery') {
         const remediationAction = job.data.remediationAction || getSimulatedRemediation(sensorType);
-        logger.info('Remediation verifying recovery (Stage 2: Resolution)', { deviceId, incidentId });
+        logger.info('Remediation verifying recovery (Stage 2: Resolution)', {
+          deviceId,
+          incidentId,
+        });
 
         const now = new Date();
         const incident = await Incident.findById(incidentId);
-        const duration = incident
-          ? Math.round((now.getTime() - incident.createdAt.getTime()) / 1000)
-          : 8;
+        if (!incident || incident.status === 'resolved') return;
+
+        const device = await Device.findById(deviceId).lean();
+        const thresholds = await Threshold.find({
+          enabled: true,
+          deviceId: { $in: [deviceId, '*'] },
+        }).lean();
+        const alertIds = incident.timeline.flatMap((event) =>
+          event.alertId ? [event.alertId] : [],
+        );
+        const linkedAlerts = await Alert.find({ _id: { $in: alertIds } }).lean();
+        const affectedSensors = [
+          ...new Set([sensorType, ...linkedAlerts.map((alert) => alert.sensorType)]),
+        ];
+        const evidence = await Promise.all(
+          affectedSensors.map(async (type) => {
+            const reading = await SensorData.findOne({
+              'metadata.deviceId': deviceId,
+              'metadata.sensorType': type,
+            })
+              .sort({ timestamp: -1 })
+              .lean();
+            const threshold = device
+              ? selectThreshold(thresholds, deviceId, device.type, type)
+              : undefined;
+            return {
+              type,
+              reading,
+              safe: isRecoveryConfirmed(reading, threshold, incident.createdAt, now.getTime()),
+            };
+          }),
+        );
+        const pending = evidence.filter((item) => !item.safe);
+        if (pending.length > 0) {
+          const verificationAttempt = (job.data.verificationAttempt || 0) + 1;
+          if (verificationAttempt < 6) {
+            await getQueues().remediationQueue.add(
+              'verify-recovery',
+              {
+                ...job.data,
+                verificationAttempt,
+              },
+              {
+                delay: 8000,
+                jobId: `verify-${incidentId}-${job.data.verificationRun || 'initial'}-${verificationAttempt}`,
+                removeOnComplete: 100,
+                removeOnFail: 50,
+              },
+            );
+          } else {
+            await Incident.updateOne(
+              { _id: incidentId },
+              {
+                $set: { status: 'investigating' },
+                $push: {
+                  timeline: {
+                    timestamp: now,
+                    event: 'escalated',
+                    details: `Recovery not confirmed: fresh safe telemetry missing for ${pending.map((item) => item.type).join(', ')}. Operator review required.`,
+                  },
+                },
+              },
+            );
+            await Device.updateOne({ _id: deviceId }, { $set: { status: 'critical' } });
+            wsManager.broadcast('device_status', { deviceId, status: 'critical' });
+            wsManager.broadcast('incident', { action: 'escalated', incidentId });
+          }
+          endTimer('queue.job.duration', { queue: 'remediation', stage: 'verify-pending' });
+          return;
+        }
+
+        const duration = Math.round((now.getTime() - incident.createdAt.getTime()) / 1000);
 
         // 1. Resolve Incident
         await Incident.updateOne(
@@ -137,9 +214,9 @@ export function startRemediationWorker(): Worker {
               timeline: {
                 $each: [
                   {
-                    timestamp: new Date(now.getTime() - 2000),
+                    timestamp: now,
                     event: 'recovery_confirmed' as const,
-                    details: `${sensorType} values returning to normal range on ${deviceId}`,
+                    details: `Fresh telemetry confirms safe range on ${deviceId}: ${evidence.map((item) => `${item.type}=${item.reading!.value}`).join(', ')}`,
                   },
                   {
                     timestamp: now,
@@ -153,8 +230,8 @@ export function startRemediationWorker(): Worker {
         );
 
         // 2. Resolve Alert
-        await Alert.updateOne(
-          { _id: alertId },
+        await Alert.updateMany(
+          { _id: { $in: [...alertIds, alertId] } },
           {
             $set: {
               status: 'resolved',
@@ -165,10 +242,7 @@ export function startRemediationWorker(): Worker {
         );
 
         // 3. Restore device status to online
-        await Device.updateOne(
-          { _id: deviceId },
-          { $set: { status: 'online' } },
-        );
+        await Device.updateOne({ _id: deviceId }, { $set: { status: 'online' } });
 
         wsManager.broadcast('device_status', { deviceId, status: 'online' });
         wsManager.broadcast('incident', { action: 'resolved', incidentId, duration });
@@ -185,12 +259,16 @@ export function startRemediationWorker(): Worker {
           `new_status:online`,
         ]);
 
-        await sendDatadogLog('info', `✅ INCIDENT RESOLVED on ${deviceId}: ${remediationAction} (Duration: ${duration}s)`, {
-          incidentId,
-          deviceId,
-          duration,
-          resolution: remediationAction,
-        });
+        await sendDatadogLog(
+          'info',
+          `✅ INCIDENT RESOLVED on ${deviceId}: ${remediationAction} (Duration: ${duration}s)`,
+          {
+            incidentId,
+            deviceId,
+            duration,
+            resolution: remediationAction,
+          },
+        );
 
         logger.info('Incident resolved and device restored', {
           incidentId,

@@ -1,232 +1,105 @@
-# 🛡️ SensorGuard — Industrial IoT Operations Center
+# SensorGuard
 
-[![CI Pipeline](https://github.com/ddloi/sensorguard-iot/actions/workflows/ci.yml/badge.svg)](https://github.com/ddloi/sensorguard-iot/actions)
-[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue.svg)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/Tests-32%20passed-success.svg)](https://vitest.dev/)
-[![Fastify](https://img.shields.io/badge/Fastify-5.2-black.svg)](https://fastify.dev/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Time%20Series%20%2B%20Windowing-green.svg)](https://www.mongodb.com/)
-[![Datadog](https://img.shields.io/badge/Datadog-APM%20%2B%20Metrics%20%2B%20Monitors-purple.svg)](https://www.datadoghq.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+Industrial IoT monitoring demo for the MongoDB × Datadog Hackathon: simulated sensor data, time-series analytics, incident processing and evidence-based recovery.
 
-> **Real-time Industrial IoT Monitoring, Anomaly Detection & Self-Healing Architecture**  
-> Built for the **MongoDB × Datadog Hackathon 2026** (MongoDB User Group Vietnam)
+## Run locally
 
----
-
-## 🏗️ Architecture
-
-```
-                                      ┌────────────────────────┐
-                                      │   Datadog Cloud (US1)  │
-                                      │  APM, Metrics & Logs   │
-                                      └───────────▲────────────┘
-                                                  │ (APM + StatsD/Logs)
-┌───────────────────────┐  HTTP POST  ┌───────────┴────────────┐
-│  IoT Sensor Simulator │ ──────────→ │   Fastify Backend API  │
-│  (5 Industrial Units) │  /api/ingest│       (:3001)          │
-└───────────────────────┘             └─────┬──────────────┬───┘
-                                            │              │
-                   ┌────────────────────────┘              └────────────────────────┐
-                   ▼                                                                ▼
-      ┌─────────────────────────┐                                      ┌─────────────────────────┐
-      │   MongoDB Atlas Cloud   │                                      │  Upstash Redis (BullMQ) │
-      │   (Time Series Engine)  │                                      │  Distributed Queues     │
-      └────────────┬────────────┘                                      └────────────┬────────────┘
-                   │                                                                │
-                   │ Aggregation Pipeline                                           ├── threshold-check
-                   │ ($setWindowFields)                                             ├── alert-process
-                   │                                                                ├── remediation (2-stage non-blocking)
-                   ▼                                                                └── device-health
-      ┌─────────────────────────┐                                                   │
-      │   React + Vite SCADA    │ ◄─────────────────────────────────────────────────┘
-      │   Operations Center     │      WebSocket (/ws) + In-Memory Cached Analytics
-      │        (:3000)          │
-      └─────────────────────────┘
-```
-
----
-
-## 🚀 Quick Start for Collaborators
-
-### 1. Prerequisites
-- **Node.js 20+** (Tested on Node 20 / 22)
-- **npm 10+** (Monorepo workspaces support)
-- Cloud Accounts (Free tiers):
-  - **MongoDB Atlas** (M0 Free Cluster)
-  - **Upstash Redis** (Serverless Free Tier)
-  - **Datadog** (Trial or Organization API Key)
-
----
-
-### 2. Clone & Environment Setup
+Use Node.js 20+ and npm 10+. MongoDB Atlas and Redis are external services. Datadog is optional for local monitoring; verify actual delivery before presenting its integration.
 
 ```bash
-git clone <repo-url>
-cd sensorguard
-
-# Create local environment config from template
-cp .env.example .env
+npm ci
 ```
 
-Open `.env` and fill in your cloud connection credentials:
-```env
-MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/sensorguard?retryWrites=true&w=majority
-UPSTASH_REDIS_URL=rediss://<endpoint>:6379
-UPSTASH_REDIS_TOKEN=<token>
-DD_API_KEY=<your-datadog-api-key>
-DD_SITE=datadoghq.com
-```
+Copy `.env.example` to `.env` and provide your connection settings. Keep credentials on the server; never put them in `VITE_*` variables.
 
----
-
-### 3. Install Dependencies & Seed Database
-
-```bash
-# Install all workspace dependencies
-npm install
-
-# Seed 5 industrial devices & 11 threshold rules into MongoDB
-npm run seed
-```
-
----
-
-### 4. Run the Full Stack (3 Services)
-
-**Option A — Single Terminal (Recommended):**
-Run all 3 services concurrently in one single terminal:
+For a **new, empty demo database only**, run `npm run seed`. This command deletes and replaces devices, thresholds, alerts and incidents. Existing demo databases do not need reseeding after UI or structure changes.
 
 ```bash
 npm run dev
 ```
 
-**Option B — Multi-Terminal:**
-If you prefer dedicated terminals for separate logs:
+Open [the dashboard](http://localhost:3000). The API listens on port 3001 and the simulator sends readings every five seconds. To check running services:
 
 ```bash
-# Terminal 1: Fastify Backend API (Port 3001)
-npm run dev:api
-
-# Terminal 2: IoT Sensor Simulator (Streaming telemetry every 5s)
-npm run dev:simulator
-
-# Terminal 3: SCADA Operations Dashboard (Port 3000)
-npm run dev:dashboard
-```
-
-Once running, navigate to:
-👉 **`http://localhost:3000`**
-
----
-
-### 5. Run the Demo Failure Scenario (Overheat & Auto-Recovery)
-
-You can trigger the overheat failure scenario in two ways:
-1. **From the Dashboard UI**: Click the **"Demo Quá Nhiệt"** button in the header.
-2. **From Terminal**:
-   ```bash
-   npm run scenario:overheat
-   ```
-
-**What happens:**
-1. `MOTOR-001` temperature spikes from 64°C to **94°C** (>85°C critical threshold).
-2. `threshold-check` worker detects anomaly ➜ `alert-process` creates a Critical Incident.
-3. System identifies root cause: *Bearing lubrication degradation causing friction and heat buildup*.
-4. `remediation` worker automatically triggers mitigation: *Reduces RPM by 50% and initiates emergency cooling cycle*.
-5. Temperature stabilizes back down to **~64°C** within ~26 seconds, incident marked **✓ RESOLVED**.
-
----
-
-### 6. Automated Testing & Quality Assurance
-
-Run the comprehensive unit test suite covering threshold checking, sensor validation, incident state machine, remediation triggers, and windowed averages:
-
-```bash
-# Run all unit tests (27 tests across 5 test suites)
-npm test
-```
-
----
-
-### 7. Pre-Demo Stack Verification
-
-SensorGuard includes an automated pre-flight check script to verify full-stack readiness before any live demo or presentation:
-
-```bash
-# Verify API, Database, Incidents, Analytics, and Dashboard health
 npm run verify
 ```
 
----
+## Project layout
 
-## 📊 Monorepo Structure
-
-```
+```text
 sensorguard/
-├── .github/
-│   └── workflows/ci.yml      # GitHub Actions CI matrix pipeline (Node 20 & 22)
-├── datadog/
-│   ├── dashboard.json        # Exportable Datadog SCADA Dashboard (8 widgets)
-│   └── monitors.json         # Datadog Alert Monitors (SLO, temperature, ingestion)
-├── scripts/
-│   ├── verify-stack.ts       # Automated pre-demo diagnostic & health checker
-│   └── generate_docx_report.py # Automated technical report generator
 ├── packages/
-│   ├── api/                  # Fastify 5.x API, MongoDB models, BullMQ workers, Datadog tracer
+│   ├── api/
 │   │   ├── src/
-│   │   │   ├── config/       # Env validation (Zod), Redis (Upstash), Datadog StatsD
-│   │   │   ├── models/       # Mongoose schemas (Time Series, Device, Alert, Incident)
-│   │   │   ├── queues/       # BullMQ queues & worker definitions
-│   │   │   ├── routes/       # RESTful endpoints (/api/ingest, /api/analytics, /api/incidents)
-│   │   │   └── workers/      # ThresholdWorker, AlertWorker, RemediationWorker, DeviceHealthWorker
-│   │   └── scripts/seed.ts   # Database seeder
-│   │
-│   ├── dashboard/            # SCADA Operations Control Center (React 19 + Vite)
+│   │   │   ├── config/       # Environment and external connections
+│   │   │   ├── domain/       # Pure threshold and recovery rules
+│   │   │   ├── models/       # MongoDB schemas
+│   │   │   ├── queues/       # BullMQ queues
+│   │   │   ├── routes/       # HTTP and WebSocket entry points
+│   │   │   ├── services/     # Use cases and dependency health
+│   │   │   ├── utils/        # Logging and WebSocket infrastructure
+│   │   │   └── workers/      # Background incident processing
+│   │   ├── scripts/          # Explicit database setup and manual diagnostics
+│   │   └── tests/            # unit/ and integration/
+│   ├── dashboard/
 │   │   ├── src/
-│   │   │   ├── App.tsx       # Main NOC console: Topology, Radial Gauges, Timeline, Time Series
-│   │   │   ├── index.css     # Dark/Light SCADA design system with glassmorphism & ambient glow
-│   │   │   └── main.tsx
-│   │   └── vite.config.ts    # Reverse-proxies /api requests to :3001
-│   │
-│   └── simulator/            # Synthetic Industrial IoT Telemetry Generator
-│       ├── src/
-│       │   ├── devices.ts    # 5 Industrial devices (Motors, Pumps, Compressors, Conveyors)
-│       │   ├── index.ts      # Continuous telemetry loop (Gaussian noise)
-│       │   └── scenarios/    # Overheat & failure simulation scripts
-│
-├── ARCHITECTURE_STATE.md     # Single Source of Truth for architecture & model context
-├── SensorGuard_Demo_Presentation_Script.md # 3-minute hackathon pitch script
-├── docker-compose.yml        # Container orchestration
-├── .env.example              # Environment variable template
-└── package.json              # Monorepo root scripts & workspace config
+│   │   │   ├── api/          # Typed HTTP client
+│   │   │   ├── components/   # Reusable UI and application shell
+│   │   │   ├── features/     # Telemetry, incidents and architecture screens
+│   │   │   ├── hooks/        # State, polling, WebSocket and demo actions
+│   │   │   ├── types/        # Dashboard data contracts
+│   │   │   └── utils/        # Presentation helpers
+│   │   └── nginx.conf        # Container proxy and SPA fallback
+│   └── simulator/
+│       └── src/              # Configuration, equipment and scenarios
+├── scripts/
+│   ├── verify-stack.ts       # Read-only live preflight
+│   └── reports/              # Historical report generator
+├── datadog/                  # Dashboard and monitor definitions
+├── docs/                     # Architecture, development and demo guides
+│   ├── demo/
+│   ├── reference/
+│   ├── reports/
+│   └── archive/              # Historical design/pipeline material
+├── PRODUCT.md                # Product purpose and design principles
+├── DESIGN.md                 # Current visual system
+├── tsconfig.base.json        # Shared strict TypeScript settings
+└── docker-compose.yml        # API, dashboard, simulator and Datadog Agent
 ```
 
----
+The three workspaces are independently buildable. Domain rules do not import Fastify or React; browser code communicates through HTTP and WebSocket instead of importing API implementation files.
 
-## 🔌 API Endpoints Summary
+## Validation
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | API & database health status |
-| `POST` | `/api/ingest` | Ingest sensor telemetry batch |
-| `GET` | `/api/devices` | List registered industrial devices |
-| `GET` | `/api/incidents` | Lifecycle incidents (Active & Resolved) |
-| `GET` | `/api/analytics/timeseries` | Time Series telemetry with **MongoDB `$setWindowFields` Moving Average** |
-| `GET` | `/api/analytics/device-health` | Fleet-wide health matrix & last seen timestamps |
-| `GET` | `/api/analytics/anomalies` | Detected sensor outliers & threshold breaches |
+```bash
+npm run check         # Types, unit/integration tests, builds and formatting
+npm run verify        # Running API, data, WebSocket and dashboard checks
+npm run format        # Apply consistent formatting
+```
 
----
+`check` requires no cloud credentials or running database. `verify` needs the stack running and does not trigger an incident or reset data. CI fails when tests or formatting fail.
 
-## 🏆 Key Hackathon Highlights for Judges
+## Demo
 
-1. **MongoDB Time Series Collections**: Highly compressed columnar storage tailored for high-velocity sensor telemetry (`granularity: 'seconds'`).
-2. **Real-time Windowing Aggregation**: `$setWindowFields` calculates 5-minute moving averages dynamically across streaming data to eliminate sensor noise.
-3. **Event-Driven Resilience**: Asynchronous decoupling using BullMQ over Upstash Redis prevents ingest bottlenecks during alert storms.
-4. **Full Observability**: Datadog APM tracing, custom metrics (StatsD), and lifecycle recovery logs.
-5. **Self-Healing Loop**: Closed-loop automation: **Detect ➜ Root Cause ➜ Remediate ➜ Verify Recovery**.
+Click **Chạy demo quá nhiệt** for MOTOR-001. The dashboard opens incident history and follows detection, simulated diagnosis/mitigation and recovery confirmed from fresh safe readings. A failed verification stays visible for operator review; **Kiểm tra phục hồi lại** starts another bounded check without force-closing the incident.
 
----
+Sensor input, root-cause diagnosis and cooling actions are simulated. MongoDB storage, BullMQ processing and incident records use the configured services. The Datadog badge reports configuration, not proof of ingestion.
 
-## 📝 License
+- [Architecture and boundaries](docs/architecture.md)
+- [Development and commands](docs/development.md)
+- [Three-minute presentation, Vietnamese](docs/demo/presentation-vi.md)
+- [Demo readiness and caveats](docs/demo/readiness.md)
+- [Technology and Datadog reference](docs/reference/technology-and-datadog-agent.txt)
+- [Historical material](docs/archive/README.md)
+
+## Docker
+
+```bash
+npm run docker:up
+npm run docker:logs
+npm run docker:down
+```
+
+The dashboard container serves the built SPA and proxies `/api`, `/health` and `/ws` to the API. MongoDB and Redis remain external; the compose stack includes the Datadog Agent. Configure `.env` first. See [development notes](docs/development.md#docker) for validation limits.
 
 MIT

@@ -4,10 +4,10 @@ import { logger } from '../utils/logger';
 
 /**
  * BullMQ Queue Registry.
- * 
+ *
  * All queues share the same Upstash Redis connection.
  * Each queue handles a specific concern in the sensor pipeline:
- * 
+ *
  * 1. threshold-check: Compare sensor readings against configured thresholds
  * 2. alert-process:   Create alerts and send metrics to Datadog
  * 3. remediation:     Auto-fix actions (reduce speed, cooling, etc.)

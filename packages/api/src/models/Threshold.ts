@@ -43,7 +43,7 @@ const thresholdSchema = new Schema<IThresholdDocument>(
 );
 
 // Lookup thresholds for a specific device + sensor type
-thresholdSchema.index({ deviceId: 1, sensorType: 1 }, { unique: true });
+thresholdSchema.index({ deviceId: 1, deviceType: 1, sensorType: 1 }, { unique: true });
 
 export const Threshold = mongoose.model<IThresholdDocument>(
   'Threshold',

@@ -1,0 +1,22 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+coverage/
+package-lock.json
+.git/
+.env
+.env.*
+!.env.example
+.pipeline/
+.impeccable/live/sessions/
+docs/archive/
+tools/installers/
+.local/
+*.log
+*.docx
+*.msi
+*.exe
+
+# Preserve the user's WebSocket file change outside this refactor.
+packages/api/src/routes/ws.ts

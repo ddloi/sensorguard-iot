@@ -2,13 +2,13 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 /**
  * Sensor Data — stored in a MongoDB Time Series Collection.
- * 
+ *
  * Time Series Collections are optimized for:
  * - Write-heavy IoT workloads (columnar storage)
  * - Efficient time-range queries
  * - Automatic bucketing by timeField + metaField
  * - Built-in TTL via expireAfterSeconds
- * 
+ *
  * Note: We don't use Mongoose's schema validation heavily here
  * because Time Series Collections have restrictions on certain
  * operations. The schema is mainly for TypeScript type safety.

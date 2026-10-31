@@ -2,11 +2,11 @@ import winston from 'winston';
 
 /**
  * Structured JSON logger.
- * 
+ *
  * In production (Docker), logs are collected by the Datadog Agent
  * via the container's stdout. Datadog auto-correlates logs with
  * APM traces when dd-trace is active (it injects trace_id/span_id).
- * 
+ *
  * Log format: JSON for machine parsing + pretty print in dev.
  */
 const isProduction = process.env.NODE_ENV === 'production';
@@ -27,10 +27,7 @@ export const logger = winston.createLogger({
     new winston.transports.Console({
       format: isProduction
         ? winston.format.json()
-        : winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple(),
-          ),
+        : winston.format.combine(winston.format.colorize(), winston.format.simple()),
     }),
   ],
 });

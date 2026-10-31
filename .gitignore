@@ -48,3 +48,6 @@ Thumbs.db
 .vite/
 **/.vite/
 .temp/
+
+# Local installers, caches and machine-specific artifacts
+.local/

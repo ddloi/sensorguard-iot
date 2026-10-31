@@ -1,14 +1,24 @@
-import { connectDatabase } from '../src/config/database';
-import { Threshold, Incident, Alert } from '../src/models';
-import { getQueues, initQueues } from '../src/queues';
+// Manual diagnostic: creates a queue job and may create an incident. Not a test.
+import { connectDatabase } from '../../src/config/database';
+import { Threshold, Incident, Device } from '../../src/models';
+import { getQueues, initQueues } from '../../src/queues';
+import { selectThreshold } from '../../src/domain/threshold';
 
 async function main() {
   await connectDatabase();
   initQueues();
 
   const deviceId = 'MOTOR-001';
+  const device = await Device.findById(deviceId).lean();
+  if (!device) throw new Error('Demo device is not registered');
   const readings = [
-    { sensorType: 'temperature', value: 94.5, timestamp: new Date().toISOString(), unit: 'celsius', location: 'factory-floor-A' }
+    {
+      sensorType: 'temperature',
+      value: 94.5,
+      timestamp: new Date().toISOString(),
+      unit: 'celsius',
+      location: 'factory-floor-A',
+    },
   ];
 
   const thresholds = await Threshold.find({
@@ -18,15 +28,23 @@ async function main() {
 
   console.log('Thresholds matching count:', thresholds.length);
   for (const t of thresholds) {
-    console.log(' - deviceId:', t.deviceId, 'sensorType:', t.sensorType, 'critical.max:', t.critical?.max);
+    console.log(
+      ' - deviceId:',
+      t.deviceId,
+      'sensorType:',
+      t.sensorType,
+      'critical.max:',
+      t.critical?.max,
+    );
   }
 
   for (const reading of readings) {
-    const threshold =
-      thresholds.find((t) => t.deviceId === deviceId && t.sensorType === reading.sensorType) ||
-      thresholds.find((t) => t.deviceId === '*' && t.sensorType === reading.sensorType);
+    const threshold = selectThreshold(thresholds, deviceId, device.type, reading.sensorType);
 
-    console.log('Matched threshold:', threshold ? `critical max = ${threshold.critical.max}` : 'NONE');
+    console.log(
+      'Matched threshold:',
+      threshold ? `critical max = ${threshold.critical.max}` : 'NONE',
+    );
 
     if (threshold && threshold.critical.max !== null && reading.value > threshold.critical.max) {
       console.log('✅ Threshold exceeded! Value:', reading.value, '>', threshold.critical.max);

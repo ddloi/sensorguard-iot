@@ -20,12 +20,18 @@
     "seed": "npm run seed -w packages/api",
     "test": "npm run test -w packages/api",
     "test:api": "npm run test -w packages/api",
-    "test:dashboard": "echo \"Dashboard typecheck passed via build:dashboard\"",
+    "test:dashboard": "tsc --noEmit -p packages/dashboard/tsconfig.json",
     "verify": "tsx scripts/verify-stack.ts",
     "scenario:overheat": "npm run dev:scenario -w packages/simulator",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "docker:logs": "docker compose logs -f"
+    "docker:logs": "docker compose logs -f",
+    "typecheck": "npm run typecheck:api && npm run typecheck:simulator && npm run test:dashboard",
+    "typecheck:api": "tsc --noEmit -p packages/api/tsconfig.json",
+    "typecheck:simulator": "tsc --noEmit -p packages/simulator/tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm test && npm run build && npm run format:check"
   },
   "keywords": [
     "iot",
@@ -36,6 +42,11 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "concurrently": "^10.0.6"
+    "concurrently": "^10.0.6",
+    "prettier": "3.6.2"
+  },
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
   }
 }

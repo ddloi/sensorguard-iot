@@ -1,15 +1,16 @@
 /**
  * SEED SCRIPT — Populates MongoDB with initial data.
- * 
+ *
  * Run this ONCE before starting the system:
  *   npm run seed (from root)
- * 
+ *
  * Creates:
  * 1. Device documents (5 devices)
  * 2. Threshold configurations for each sensor type
  */
 
 import dns from 'node:dns';
+import path from 'node:path';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 
@@ -19,11 +20,9 @@ try {
   // Ignore in case environment restricts custom DNS
 }
 
-dotenv.config({ path: '../../.env' });
-dotenv.config({ path: '.env' });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// Import device definitions from simulator package
-// (Shared data between simulator and API)
+// Seed fixtures are local to this manual database setup script.
 const DEVICES = [
   {
     _id: 'MOTOR-001',
@@ -98,28 +97,131 @@ const DEVICES = [
     ],
     lastSeen: new Date(),
     installedAt: new Date('2026-05-01'),
-    metadata: { manufacturer: 'Bosch Rexroth', model: 'VarioFlow plus', serialNumber: 'SN-2026-005' },
+    metadata: {
+      manufacturer: 'Bosch Rexroth',
+      model: 'VarioFlow plus',
+      serialNumber: 'SN-2026-005',
+    },
   },
 ];
 
 const THRESHOLDS = [
   // Motor thresholds (applies to all motors via deviceId: "*")
-  { deviceId: '*', deviceType: 'motor', sensorType: 'temperature', warning: { min: null, max: 80 }, critical: { min: null, max: 90 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'motor', sensorType: 'vibration', warning: { min: null, max: 7 }, critical: { min: null, max: 10 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'motor', sensorType: 'rpm', warning: { min: 800, max: 1600 }, critical: { min: 500, max: 1800 }, window: 60, consecutiveCount: 3, enabled: true },
+  {
+    deviceId: '*',
+    deviceType: 'motor',
+    sensorType: 'temperature',
+    warning: { min: null, max: 80 },
+    critical: { min: null, max: 90 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'motor',
+    sensorType: 'vibration',
+    warning: { min: null, max: 7 },
+    critical: { min: null, max: 10 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'motor',
+    sensorType: 'rpm',
+    warning: { min: 800, max: 1600 },
+    critical: { min: 500, max: 1800 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
   // Pump thresholds
-  { deviceId: '*', deviceType: 'pump', sensorType: 'temperature', warning: { min: null, max: 65 }, critical: { min: null, max: 80 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'pump', sensorType: 'pressure', warning: { min: 30, max: 100 }, critical: { min: 20, max: 130 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'pump', sensorType: 'vibration', warning: { min: null, max: 5 }, critical: { min: null, max: 8 }, window: 60, consecutiveCount: 3, enabled: true },
+  {
+    deviceId: '*',
+    deviceType: 'pump',
+    sensorType: 'temperature',
+    warning: { min: null, max: 65 },
+    critical: { min: null, max: 80 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'pump',
+    sensorType: 'pressure',
+    warning: { min: 30, max: 100 },
+    critical: { min: 20, max: 130 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'pump',
+    sensorType: 'vibration',
+    warning: { min: null, max: 5 },
+    critical: { min: null, max: 8 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
   // Compressor thresholds
-  { deviceId: '*', deviceType: 'compressor', sensorType: 'temperature', warning: { min: null, max: 95 }, critical: { min: null, max: 110 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'compressor', sensorType: 'pressure', warning: { min: 90, max: 140 }, critical: { min: 80, max: 160 }, window: 60, consecutiveCount: 3, enabled: true },
+  {
+    deviceId: '*',
+    deviceType: 'compressor',
+    sensorType: 'temperature',
+    warning: { min: null, max: 95 },
+    critical: { min: null, max: 110 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'compressor',
+    sensorType: 'pressure',
+    warning: { min: 90, max: 140 },
+    critical: { min: 80, max: 160 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
   // Conveyor thresholds
-  { deviceId: '*', deviceType: 'conveyor', sensorType: 'temperature', warning: { min: null, max: 50 }, critical: { min: null, max: 65 }, window: 60, consecutiveCount: 3, enabled: true },
-  { deviceId: '*', deviceType: 'conveyor', sensorType: 'vibration', warning: { min: null, max: 4 }, critical: { min: null, max: 7 }, window: 60, consecutiveCount: 3, enabled: true },
+  {
+    deviceId: '*',
+    deviceType: 'conveyor',
+    sensorType: 'temperature',
+    warning: { min: null, max: 50 },
+    critical: { min: null, max: 65 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
+  {
+    deviceId: '*',
+    deviceType: 'conveyor',
+    sensorType: 'vibration',
+    warning: { min: null, max: 4 },
+    critical: { min: null, max: 7 },
+    window: 60,
+    consecutiveCount: 3,
+    enabled: true,
+  },
 
   // Specific override for MOTOR-001 (demo target — lower thresholds to trigger easier)
-  { deviceId: 'MOTOR-001', deviceType: 'motor', sensorType: 'temperature', warning: { min: null, max: 80 }, critical: { min: null, max: 85 }, window: 60, consecutiveCount: 2, enabled: true },
+  {
+    deviceId: 'MOTOR-001',
+    deviceType: 'motor',
+    sensorType: 'temperature',
+    warning: { min: null, max: 80 },
+    critical: { min: null, max: 85 },
+    window: 60,
+    consecutiveCount: 2,
+    enabled: true,
+  },
 ];
 
 async function seed() {

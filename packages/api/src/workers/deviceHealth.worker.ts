@@ -8,7 +8,7 @@ const OFFLINE_THRESHOLD_MS = 30_000; // 30 seconds without data = offline
 
 /**
  * DeviceHealthWorker: Periodically checks for offline devices.
- * 
+ *
  * Runs as a repeatable job (every 30s). Compares each device's
  * lastSeen timestamp against the current time. Devices that haven't
  * reported in 30+ seconds are marked offline.
@@ -30,10 +30,7 @@ export function startDeviceHealthWorker(): Worker {
       }).lean();
 
       for (const device of staleDevices) {
-        await Device.updateOne(
-          { _id: device._id },
-          { $set: { status: 'offline' } },
-        );
+        await Device.updateOne({ _id: device._id }, { $set: { status: 'offline' } });
 
         datadogMetrics.increment('device.status.change', 1, [
           `device:${device._id}`,
@@ -48,17 +45,15 @@ export function startDeviceHealthWorker(): Worker {
       }
 
       // Also check: devices that were offline but are now sending data again
-      const recentCutoff = new Date(now - 10_000); // within last 10s
+      // lastSeen is throttled to 15s by ingest; use the same 30s freshness window.
+      const recentCutoff = cutoff;
       const recoveredDevices = await Device.find({
         status: 'offline',
         lastSeen: { $gte: recentCutoff },
       }).lean();
 
       for (const device of recoveredDevices) {
-        await Device.updateOne(
-          { _id: device._id },
-          { $set: { status: 'online' } },
-        );
+        await Device.updateOne({ _id: device._id }, { $set: { status: 'online' } });
 
         datadogMetrics.increment('device.status.change', 1, [
           `device:${device._id}`,

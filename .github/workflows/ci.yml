@@ -1,4 +1,4 @@
-name: '🛡️ SensorGuard CI'
+name: SensorGuard CI
 
 on:
   push:
@@ -8,56 +8,37 @@ on:
 
 jobs:
   verify:
-    name: 'Typecheck & Lint'
+    name: Build and typecheck
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [20, 22]
-
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-
-      - name: 📦 Install dependencies
+          cache: npm
+      - name: Install locked dependencies
         run: npm ci
-
-      - name: 🔍 Typecheck API
-        run: npm run build:api
-
-      - name: 🔍 Typecheck Simulator
-        run: npm run build:simulator
-
-      - name: 🔍 Typecheck Dashboard
-        run: npm run build:dashboard
+      - name: Build all workspaces
+        run: npm run build
+      - name: Check types
+        run: npm run typecheck
 
   test:
-    name: 'Test Suite'
+    name: Tests and formatting
     runs-on: ubuntu-latest
     needs: verify
-
     steps:
-      - name: 📥 Checkout
-        uses: actions/checkout@v4
-
-      - name: 🟢 Setup Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
-
-      - name: 📦 Install dependencies
+          cache: npm
+      - name: Install locked dependencies
         run: npm ci
-
-      - name: 🧪 Run API tests
+      - name: Run API tests
         run: npm run test:api
-        continue-on-error: true
-
-      - name: 🧪 Run Dashboard tests
-        run: npm run test:dashboard
-        continue-on-error: true
+      - name: Check source formatting
+        run: npm run format:check

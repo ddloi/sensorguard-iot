@@ -113,11 +113,13 @@ describe('Sensor Data Validation', () => {
   });
 
   it('should accept payload without optional timestamp', () => {
-    expect(validateIngestPayload({
-      deviceId: 'PUMP-002',
-      sensorType: 'vibration',
-      value: 2.1,
-    })).toEqual({ valid: true });
+    expect(
+      validateIngestPayload({
+        deviceId: 'PUMP-002',
+        sensorType: 'vibration',
+        value: 2.1,
+      }),
+    ).toEqual({ valid: true });
   });
 
   it('should reject missing deviceId', () => {
@@ -136,12 +138,19 @@ describe('Sensor Data Validation', () => {
   });
 
   it('should reject Infinity value', () => {
-    const result = validateIngestPayload({ deviceId: 'X', sensorType: 'temperature', value: Infinity });
+    const result = validateIngestPayload({
+      deviceId: 'X',
+      sensorType: 'temperature',
+      value: Infinity,
+    });
     expect(result.valid).toBe(false);
   });
 
   it('should reject null payload', () => {
-    expect(validateIngestPayload(null)).toEqual({ valid: false, error: 'Payload must be an object' });
+    expect(validateIngestPayload(null)).toEqual({
+      valid: false,
+      error: 'Payload must be an object',
+    });
   });
 });
 
@@ -220,10 +229,12 @@ describe('Remediation Strategy', () => {
       },
     };
 
-    return strategies[sensorType] ?? {
-      rootCause: 'Unknown anomaly requiring manual investigation',
-      action: 'Device placed in safe mode pending operator review',
-    };
+    return (
+      strategies[sensorType] ?? {
+        rootCause: 'Unknown anomaly requiring manual investigation',
+        action: 'Device placed in safe mode pending operator review',
+      }
+    );
   }
 
   it('should return temperature remediation for temperature type', () => {

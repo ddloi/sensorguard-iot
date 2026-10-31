@@ -18,19 +18,19 @@ function setCache<T>(key: string, data: T, ttlMs = 2500): void {
 
 /**
  * ANALYTICS ROUTES — MongoDB Aggregation Pipeline showcase.
- * 
+ *
  * These endpoints demonstrate advanced MongoDB features:
  * - $setWindowFields for moving averages (HIGHLIGHT for judges)
  * - Time-bucketed aggregations for charts
  * - Device health summaries
- * 
+ *
  * This is where SensorGuard earns MongoDB "kỹ thuật" points.
  */
 export async function analyticsRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/analytics/timeseries
    * Returns time-bucketed sensor data for charts.
-   * 
+   *
    * Query params:
    *   deviceId  — required
    *   sensorType — required (temperature, vibration, pressure, rpm)
@@ -45,12 +45,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       bucketSeconds?: string;
     };
   }>('/api/analytics/timeseries', async (request, reply) => {
-    const {
-      deviceId,
-      sensorType,
-      minutes = '30',
-      bucketSeconds = '10',
-    } = request.query;
+    const { deviceId, sensorType, minutes = '30', bucketSeconds = '10' } = request.query;
 
     if (!deviceId || !sensorType) {
       return reply.status(400).send({ error: 'deviceId and sensorType required' });
@@ -143,6 +138,8 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
           timestamp: { $gte: new Date(Date.now() - 5 * 60 * 1000) }, // 5 min
         },
       },
+      // $last is only the latest reading when input order is explicit.
+      { $sort: { timestamp: 1 } },
       {
         $group: {
           _id: {
@@ -261,10 +258,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
             $cond: {
               if: { $gt: ['$rollingStdDev', 0] },
               then: {
-                $divide: [
-                  { $subtract: ['$value', '$rollingAvg'] },
-                  '$rollingStdDev',
-                ],
+                $divide: [{ $subtract: ['$value', '$rollingAvg'] }, '$rollingStdDev'],
               },
               else: 0,
             },
@@ -273,10 +267,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       },
       {
         $match: {
-          $or: [
-            { zScore: { $gt: zThreshold } },
-            { zScore: { $lt: -zThreshold } },
-          ],
+          $or: [{ zScore: { $gt: zThreshold } }, { zScore: { $lt: -zThreshold } }],
         },
       },
       { $sort: { timestamp: -1 } },

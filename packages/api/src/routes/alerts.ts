@@ -3,7 +3,7 @@ import { Alert } from '../models';
 
 /**
  * ALERT ROUTES — Dashboard reads alerts from here.
- * 
+ *
  * GET /api/alerts            → List alerts (filterable)
  * PATCH /api/alerts/:id/ack  → Acknowledge an alert
  */
@@ -32,25 +32,22 @@ export async function alertRoutes(fastify: FastifyInstance) {
   });
 
   // Acknowledge an alert
-  fastify.patch<{ Params: { id: string } }>(
-    '/api/alerts/:id/ack',
-    async (request, reply) => {
-      const alert = await Alert.findByIdAndUpdate(
-        request.params.id,
-        {
-          $set: {
-            status: 'acknowledged',
-            acknowledgedAt: new Date(),
-          },
+  fastify.patch<{ Params: { id: string } }>('/api/alerts/:id/ack', async (request, reply) => {
+    const alert = await Alert.findByIdAndUpdate(
+      request.params.id,
+      {
+        $set: {
+          status: 'acknowledged',
+          acknowledgedAt: new Date(),
         },
-        { new: true },
-      );
+      },
+      { new: true },
+    );
 
-      if (!alert) {
-        return reply.status(404).send({ error: 'Alert not found' });
-      }
+    if (!alert) {
+      return reply.status(404).send({ error: 'Alert not found' });
+    }
 
-      return reply.send(alert);
-    },
-  );
+    return reply.send(alert);
+  });
 }
