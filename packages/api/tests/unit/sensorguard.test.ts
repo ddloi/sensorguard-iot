@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { ingestSchema } from '../../src/domain/telemetry';
+import { findThresholdViolation, type ThresholdRule } from '../../src/domain/threshold';
 
 /**
  * SensorGuard API — Unit Tests
@@ -10,20 +12,8 @@ import { describe, it, expect } from 'vitest';
 // ─── Threshold Rule Tests ────────────────────────────────────────────────────
 
 describe('Threshold Rule Logic', () => {
-  interface ThresholdRule {
-    warning: { min: number | null; max: number | null };
-    critical: { min: number | null; max: number | null };
-  }
-
-  type Severity = 'normal' | 'warning' | 'critical';
-
-  function evaluateThreshold(value: number, rule: ThresholdRule): Severity {
-    if (rule.critical.max !== null && value >= rule.critical.max) return 'critical';
-    if (rule.critical.min !== null && value <= rule.critical.min) return 'critical';
-    if (rule.warning.max !== null && value >= rule.warning.max) return 'warning';
-    if (rule.warning.min !== null && value <= rule.warning.min) return 'warning';
-    return 'normal';
-  }
+  const evaluateThreshold = (value: number, rule: ThresholdRule) =>
+    findThresholdViolation(value, rule)?.severity ?? 'normal';
 
   const temperatureRule: ThresholdRule = {
     warning: { min: 10, max: 75 },
@@ -63,94 +53,51 @@ describe('Threshold Rule Logic', () => {
 // ─── Sensor Data Validation Tests ────────────────────────────────────────────
 
 describe('Sensor Data Validation', () => {
-  interface IngestPayload {
-    deviceId: string;
-    sensorType: string;
-    value: number;
-    timestamp?: string;
-  }
+  const reading = { sensorType: 'temperature', value: 64.3, unit: 'celsius' };
+  const payload = { deviceId: 'MOTOR-001', readings: [reading] };
 
-  type ValidationResult = { valid: true } | { valid: false; error: string };
-
-  function validateIngestPayload(payload: unknown): ValidationResult {
-    if (!payload || typeof payload !== 'object') {
-      return { valid: false, error: 'Payload must be an object' };
-    }
-
-    const data = payload as Record<string, unknown>;
-
-    if (!data.deviceId || typeof data.deviceId !== 'string') {
-      return { valid: false, error: 'deviceId is required and must be a string' };
-    }
-
-    const validSensorTypes = ['temperature', 'vibration', 'pressure', 'rpm'];
-    if (!validSensorTypes.includes(data.sensorType as string)) {
-      return { valid: false, error: `sensorType must be one of: ${validSensorTypes.join(', ')}` };
-    }
-
-    if (typeof data.value !== 'number' || !Number.isFinite(data.value)) {
-      return { valid: false, error: 'value must be a finite number' };
-    }
-
-    if (data.timestamp !== undefined) {
-      const ts = new Date(data.timestamp as string);
-      if (isNaN(ts.getTime())) {
-        return { valid: false, error: 'timestamp must be a valid ISO date string' };
-      }
-    }
-
-    return { valid: true };
-  }
-
-  it('should accept valid telemetry payload', () => {
-    const payload: IngestPayload = {
-      deviceId: 'MOTOR-001',
-      sensorType: 'temperature',
-      value: 64.3,
-      timestamp: new Date().toISOString(),
-    };
-    expect(validateIngestPayload(payload)).toEqual({ valid: true });
+  it('accepts a valid batch and supplies the default quality', () => {
+    expect(ingestSchema.parse(payload).readings[0].quality).toBe('good');
   });
-
-  it('should accept payload without optional timestamp', () => {
+  it('accepts an explicit quality', () => {
     expect(
-      validateIngestPayload({
-        deviceId: 'PUMP-002',
-        sensorType: 'vibration',
-        value: 2.1,
-      }),
-    ).toEqual({ valid: true });
+      ingestSchema.safeParse({
+        ...payload,
+        readings: [{ ...reading, quality: 'degraded' }],
+      }).success,
+    ).toBe(true);
   });
-
-  it('should reject missing deviceId', () => {
-    const result = validateIngestPayload({ sensorType: 'temperature', value: 50 });
-    expect(result.valid).toBe(false);
+  it('rejects a missing deviceId', () => {
+    expect(ingestSchema.safeParse({ readings: [reading] }).success).toBe(false);
   });
-
-  it('should reject invalid sensorType', () => {
-    const result = validateIngestPayload({ deviceId: 'X', sensorType: 'humidity', value: 50 });
-    expect(result.valid).toBe(false);
+  it('rejects an unknown sensor type', () => {
+    expect(
+      ingestSchema.safeParse({
+        ...payload,
+        readings: [{ ...reading, sensorType: 'humidity' }],
+      }).success,
+    ).toBe(false);
   });
-
-  it('should reject NaN value', () => {
-    const result = validateIngestPayload({ deviceId: 'X', sensorType: 'temperature', value: NaN });
-    expect(result.valid).toBe(false);
+  it('rejects NaN readings', () => {
+    expect(
+      ingestSchema.safeParse({
+        ...payload,
+        readings: [{ ...reading, value: NaN }],
+      }).success,
+    ).toBe(false);
   });
-
-  it('should reject Infinity value', () => {
-    const result = validateIngestPayload({
-      deviceId: 'X',
-      sensorType: 'temperature',
-      value: Infinity,
-    });
-    expect(result.valid).toBe(false);
+  it('rejects infinite readings', () => {
+    expect(
+      ingestSchema.safeParse({
+        ...payload,
+        readings: [{ ...reading, value: Infinity }],
+      }).success,
+    ).toBe(false);
   });
-
-  it('should reject null payload', () => {
-    expect(validateIngestPayload(null)).toEqual({
-      valid: false,
-      error: 'Payload must be an object',
-    });
+  it('rejects empty batches and invalid payloads', () => {
+    for (const invalid of [null, {}, { deviceId: 'MOTOR-001', readings: [] }]) {
+      expect(ingestSchema.safeParse(invalid).success).toBe(false);
+    }
   });
 });
 

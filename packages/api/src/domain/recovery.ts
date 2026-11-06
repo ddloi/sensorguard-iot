@@ -1,3 +1,6 @@
+const MAX_READING_AGE_MS = 30_000;
+const MAX_FUTURE_CLOCK_SKEW_MS = 5000;
+
 interface RecoveryReading {
   timestamp: Date | string;
   value: number;
@@ -20,8 +23,8 @@ export function isRecoveryConfirmed(
   if (
     !Number.isFinite(timestamp) ||
     timestamp <= incidentStartedAt.getTime() ||
-    age < -5000 ||
-    age > 30000
+    age < -MAX_FUTURE_CLOCK_SKEW_MS ||
+    age > MAX_READING_AGE_MS
   )
     return false;
   return [threshold.warning, threshold.critical].every(

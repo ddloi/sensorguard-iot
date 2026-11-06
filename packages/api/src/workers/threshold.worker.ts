@@ -4,8 +4,10 @@ import { Threshold, Device, Alert, Incident } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, startTimer } from '../config/datadog';
 import { logger } from '../utils/logger';
-import { selectThreshold } from '../domain/threshold';
+import { selectThreshold, findThresholdViolation } from '../domain/threshold';
 import { wsManager } from '../utils/websocket';
+
+const ALERT_DEBOUNCE_MS = 10_000;
 
 interface ThresholdJobData {
   deviceId: string;
@@ -18,13 +20,6 @@ interface ThresholdJobData {
   }>;
 }
 
-/**
- * ThresholdWorker: Compares incoming sensor readings against configured thresholds.
- *
- * For each reading that exceeds a threshold, it dispatches a job to the alert queue.
- * This separation (ingest → threshold check → alert) keeps the API response fast
- * while ensuring no threshold violation is missed.
- */
 export function startThresholdWorker(): Worker {
   const connection = createRedisConnection();
 
@@ -51,110 +46,19 @@ export function startThresholdWorker(): Worker {
 
         if (!threshold) continue;
 
-        // Check CRITICAL threshold (both max and min)
-        const isCriticalMax =
-          threshold.critical.max !== null && reading.value >= threshold.critical.max;
-        const isCriticalMin =
-          threshold.critical.min !== null && reading.value <= threshold.critical.min;
-
-        if (isCriticalMax || isCriticalMin) {
-          hasViolation = true;
-          const thresholdValue = isCriticalMax ? threshold.critical.max! : threshold.critical.min!;
-          const debounceWindow = Math.floor(Date.now() / 10000); // 10s deduplication window
-          const { alertQueue } = getQueues();
-
-          await alertQueue.add(
-            'critical-alert',
-            {
-              deviceId,
-              sensorType: reading.sensorType,
-              value: reading.value,
-              thresholdValue,
-              severity: 'critical',
-              timestamp: reading.timestamp,
-            },
-            {
-              jobId: `alert-${deviceId}-${reading.sensorType}-critical-${debounceWindow}`,
-              removeOnComplete: 100,
-              removeOnFail: 50,
-            },
+        const violation = findThresholdViolation(reading.value, threshold);
+        if (!violation) {
+          await Alert.updateMany(
+            { deviceId, sensorType: reading.sensorType, severity: 'warning', status: 'active' },
+            { $set: { status: 'resolved', resolvedAt: new Date(), resolvedBy: 'auto' } },
           );
-
-          datadogMetrics.increment('sensor.threshold.exceeded', 1, [
-            `device:${deviceId}`,
-            `sensor_type:${reading.sensorType}`,
-            `severity:critical`,
-          ]);
-
-          logger.warn('Critical threshold exceeded', {
-            deviceId,
-            sensorType: reading.sensorType,
-            value: reading.value,
-            threshold: thresholdValue,
-          });
+          continue;
         }
-        // Check WARNING threshold (both max and min)
-        else {
-          const isWarningMax =
-            threshold.warning.max !== null && reading.value >= threshold.warning.max;
-          const isWarningMin =
-            threshold.warning.min !== null && reading.value <= threshold.warning.min;
-
-          if (isWarningMax || isWarningMin) {
-            hasViolation = true;
-            const thresholdValue = isWarningMax ? threshold.warning.max! : threshold.warning.min!;
-            const debounceWindow = Math.floor(Date.now() / 10000);
-            const { alertQueue } = getQueues();
-
-            await alertQueue.add(
-              'warning-alert',
-              {
-                deviceId,
-                sensorType: reading.sensorType,
-                value: reading.value,
-                thresholdValue,
-                severity: 'warning',
-                timestamp: reading.timestamp,
-              },
-              {
-                jobId: `alert-${deviceId}-${reading.sensorType}-warning-${debounceWindow}`,
-                removeOnComplete: 100,
-                removeOnFail: 50,
-              },
-            );
-
-            datadogMetrics.increment('sensor.threshold.exceeded', 1, [
-              `device:${deviceId}`,
-              `sensor_type:${reading.sensorType}`,
-              `severity:warning`,
-            ]);
-          } else {
-            await Alert.updateMany(
-              { deviceId, sensorType: reading.sensorType, severity: 'warning', status: 'active' },
-              {
-                $set: { status: 'resolved', resolvedAt: new Date(), resolvedBy: 'auto' },
-              },
-            );
-          }
-        }
+        hasViolation = true;
+        await enqueueThresholdAlert(deviceId, reading, violation);
       }
 
-      // A normal new packet clears a warning/offline state, while active incidents
-      // remain owned by the remediation workflow.
-      if (
-        !hasViolation &&
-        ['warning', 'offline'].includes(device.status) &&
-        !(await Incident.exists({ deviceId, status: { $ne: 'resolved' } }))
-      ) {
-        const result = await Device.updateOne(
-          { _id: deviceId, status: { $in: ['warning', 'offline'] } },
-          {
-            $set: { status: 'online' },
-          },
-        );
-        if (result.modifiedCount)
-          wsManager.broadcast('device_status', { deviceId, status: 'online' });
-      }
+      if (!hasViolation) await restoreDeviceStatus(deviceId, device.status);
 
       endTimer('queue.job.duration', { queue: 'threshold-check' });
     },
@@ -177,4 +81,56 @@ export function startThresholdWorker(): Worker {
 
   logger.info('✅ ThresholdWorker started');
   return worker;
+}
+
+async function enqueueThresholdAlert(
+  deviceId: string,
+  reading: ThresholdJobData['readings'][number],
+  violation: NonNullable<ReturnType<typeof findThresholdViolation>>,
+) {
+  const { severity, thresholdValue } = violation;
+  const debounceWindow = Math.floor(Date.now() / ALERT_DEBOUNCE_MS);
+  await getQueues().alertQueue.add(
+    `${severity}-alert`,
+    {
+      deviceId,
+      sensorType: reading.sensorType,
+      value: reading.value,
+      thresholdValue,
+      severity,
+      timestamp: reading.timestamp,
+    },
+    {
+      jobId: `alert-${deviceId}-${reading.sensorType}-${severity}-${debounceWindow}`,
+      removeOnComplete: 100,
+      removeOnFail: 50,
+    },
+  );
+  datadogMetrics.increment('sensor.threshold.exceeded', 1, [
+    `device:${deviceId}`,
+    `sensor_type:${reading.sensorType}`,
+    `severity:${severity}`,
+  ]);
+  if (severity === 'critical') {
+    logger.warn('Critical threshold exceeded', {
+      deviceId,
+      sensorType: reading.sensorType,
+      value: reading.value,
+      threshold: thresholdValue,
+    });
+  }
+}
+async function restoreDeviceStatus(deviceId: string, status: string) {
+  if (
+    ['warning', 'offline'].includes(status) &&
+    !(await Incident.exists({ deviceId, status: { $ne: 'resolved' } }))
+  ) {
+    const result = await Device.updateOne(
+      { _id: deviceId, status: { $in: ['warning', 'offline'] } },
+      {
+        $set: { status: 'online' },
+      },
+    );
+    if (result.modifiedCount) wsManager.broadcast('device_status', { deviceId, status: 'online' });
+  }
 }

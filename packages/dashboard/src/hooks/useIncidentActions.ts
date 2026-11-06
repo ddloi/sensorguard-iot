@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, requestRecoveryRecheck, triggerOverheat } from '../api/client';
 import type { Feedback, Incident } from '../types/domain';
 
+const DEMO_TIMEOUT_MS = 60_000;
+const INCIDENT_TIMESTAMP_TOLERANCE_MS = 1000;
+
 interface IncidentActionsOptions {
   incidents: Incident[];
   now: number;
@@ -42,12 +45,14 @@ export function useIncidentActions({
     ? incidents.find(
         (incident) =>
           incident.deviceId === 'MOTOR-001' &&
-          new Date(incident.createdAt).getTime() >= demoStarted - 1000,
+          new Date(incident.createdAt).getTime() >= demoStarted - INCIDENT_TIMESTAMP_TOLERANCE_MS,
       )
     : undefined;
   const demoRunning =
-    demoStarted !== null && demoIncident?.status !== 'resolved' && now - demoStarted < 60_000;
-  const demoTimedOut = demoStarted !== null && now - demoStarted >= 60_000;
+    demoStarted !== null &&
+    demoIncident?.status !== 'resolved' &&
+    now - demoStarted < DEMO_TIMEOUT_MS;
+  const demoTimedOut = demoStarted !== null && now - demoStarted >= DEMO_TIMEOUT_MS;
   const demoDisabled = sending || demoRunning || motorActive || !ready;
   useEffect(() => {
     if (!demoStarted) return;

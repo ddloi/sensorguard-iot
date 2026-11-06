@@ -3,6 +3,12 @@ import { fetchDevices, fetchHealth, fetchIncidents, fetchTemperatureSeries } fro
 import type { DashboardErrors, Device, Health, Incident, TimeSeriesPoint } from '../types/domain';
 import { getDeviceStatus } from '../utils/devices';
 import { sensorInfo } from '../utils/sensors';
+import { useDashboardSocket } from './useDashboardSocket';
+
+const SENSOR_ORDER = Object.keys(sensorInfo);
+const REFRESH_TIMEOUT_MS = 10_000;
+const REFRESH_INTERVAL_MS = 5000;
+const STALE_AFTER_MS = 15_000;
 
 /** Owns remote state, refresh cancellation, polling and the WebSocket lifetime. */
 export function useDashboardData() {
@@ -15,7 +21,6 @@ export function useDashboardData() {
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
   const [now, setNow] = useState(Date.now());
   const request = useRef<AbortController | null>(null);
   const pending = useRef(false);
@@ -35,7 +40,7 @@ export function useDashboardData() {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    const timeout = setTimeout(() => controller.abort('timeout'), 10_000);
+    const timeout = setTimeout(() => controller.abort('timeout'), REFRESH_TIMEOUT_MS);
     setIsRefreshing(true);
     pending.current = true;
     const [fleet, events, series, status] = await Promise.allSettled([
@@ -50,12 +55,11 @@ export function useDashboardData() {
     if (controller.signal.aborted && controller.signal.reason !== 'timeout') return;
     const nextErrors: DashboardErrors = {};
     if (fleet.status === 'fulfilled') {
-      const sensorOrder = Object.keys(sensorInfo);
       setDevices(
         fleet.value.map((device) => ({
           ...device,
           sensors: [...device.sensors].sort(
-            (a, b) => sensorOrder.indexOf(a.type) - sensorOrder.indexOf(b.type),
+            (a, b) => SENSOR_ORDER.indexOf(a.type) - SENSOR_ORDER.indexOf(b.type),
           ),
         })),
       );
@@ -76,74 +80,23 @@ export function useDashboardData() {
     pending.current = false;
   }, [selectedDevice]);
 
-  const refreshRef = useRef(refresh);
-  useEffect(() => {
-    refreshRef.current = refresh;
-  }, [refresh]);
   useEffect(() => {
     setTimeSeries([]);
     void refresh();
     const timer = setInterval(() => {
       if (!document.hidden && !pending.current) void refresh();
-    }, 5000);
+    }, REFRESH_INTERVAL_MS);
     return () => {
       clearInterval(timer);
       request.current?.abort();
     };
   }, [refresh]);
 
-  useEffect(() => {
-    let disposed = false;
-    let socket: WebSocket | null = null;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const connect = () => {
-      if (disposed) return;
-      socket = new WebSocket(
-        `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`,
-      );
-      socket.onopen = () => {
-        if (!disposed) setWsConnected(true);
-      };
-      socket.onmessage = (event) => {
-        if (disposed) return;
-        try {
-          const message = JSON.parse(event.data);
-          if (message.event === 'device_status')
-            setDevices((previous) =>
-              previous.map((device) =>
-                device.deviceId === message.data.deviceId
-                  ? { ...device, status: message.data.status }
-                  : device,
-              ),
-            );
-          if (['incident', 'alert'].includes(message.event)) void refreshRef.current();
-        } catch {
-          /* Malformed events do not prevent API polling. */
-        }
-      };
-      socket.onerror = () => socket?.close();
-      socket.onclose = () => {
-        if (!disposed) {
-          setWsConnected(false);
-          timer = setTimeout(connect, 4000);
-        }
-      };
-    };
-    connect();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-      if (socket) {
-        socket.onclose = null;
-        socket.onmessage = null;
-        socket.close();
-      }
-    };
-  }, []);
+  const wsConnected = useDashboardSocket(setDevices, refresh);
 
   const activeIncidents = incidents.filter((incident) => incident.status !== 'resolved');
   const resolvedIncidents = incidents.filter((incident) => incident.status === 'resolved');
-  const stale = lastRefreshed !== null && now - lastRefreshed > 15_000;
+  const stale = lastRefreshed !== null && now - lastRefreshed > STALE_AFTER_MS;
   const ready =
     health?.status === 'ok' &&
     !stale &&

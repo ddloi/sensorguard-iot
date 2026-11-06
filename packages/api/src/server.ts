@@ -19,34 +19,18 @@ import { logger } from './utils/logger';
 import { getRedisConnection } from './config/redis';
 import { getServiceHealth } from './services/health';
 
-/**
- * SERVER SETUP — Fastify application assembly.
- *
- * Boot sequence:
- * 1. Create Fastify instance
- * 2. Register CORS (for Next.js dashboard)
- * 3. Connect MongoDB
- * 4. Initialize BullMQ queues + Upstash Redis
- * 5. Start BullMQ workers
- * 6. Register API routes
- * 7. Set up repeatable jobs (device health check)
- * 8. Listen on port
- */
 export async function buildServer() {
   const fastify = Fastify({
-    logger: false, // We use Winston instead
+    logger: false,
   });
 
-  // 1. CORS — allow dashboard to call API
   await fastify.register(cors, {
     origin: true, // Allow all origins in dev
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   });
 
-  // 1.1 WebSocket support for real-time live telemetry
   await fastify.register(websocket);
 
-  // 2. Health check
   fastify.get('/health', async (_request, reply) => {
     const health = await getServiceHealth({
       pingMongo: async () => {
@@ -66,19 +50,15 @@ export async function buildServer() {
     return reply.code(health.status === 'ok' ? 200 : 503).send(health);
   });
 
-  // 3. Connect MongoDB
   await connectDatabase();
 
-  // 4. Initialize BullMQ queues
   initQueues();
 
-  // 5. Start workers
   startThresholdWorker();
   startAlertWorker();
   startRemediationWorker();
   startDeviceHealthWorker();
 
-  // 6. Register routes
   await fastify.register(ingestRoutes);
   await fastify.register(deviceRoutes);
   await fastify.register(alertRoutes);
@@ -86,7 +66,6 @@ export async function buildServer() {
   await fastify.register(analyticsRoutes);
   await fastify.register(websocketRoutes);
 
-  // 7. Set up repeatable device health check job (every 30s)
   const { deviceHealthQueue } = getQueues();
   await deviceHealthQueue.add(
     'health-check',
@@ -116,7 +95,6 @@ export async function startServer() {
     process.exit(1);
   }
 
-  // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
   for (const signal of signals) {
     process.on(signal, async () => {

@@ -1,33 +1,14 @@
 import { DEVICES, DeviceDefinition, SensorDefinition } from './devices';
 import { simulatorConfig } from './config';
 
-/**
- * IOT SENSOR SIMULATOR
- *
- * Architecture overview:
- * ┌──────────────┐    HTTP POST     ┌──────────────┐
- * │  Simulator   │ ───────────────→ │  Fastify API │
- * │  (this file) │  /api/ingest     │  :3001       │
- * └──────────────┘                  └──────────────┘
- *
- * The simulator generates realistic sensor data:
- * - Normal operation: values fluctuate within normalMin/normalMax
- * - Gaussian noise: ±5% random variation (like real sensors)
- * - Sends batch every INTERVAL_MS (default 5 seconds)
- *
- * Each device sends its own HTTP request with all sensor readings.
- */
-
 const API_URL = simulatorConfig.apiUrl;
 const INTERVAL_MS = simulatorConfig.intervalMs;
+const API_STARTUP_ATTEMPTS = 30;
+const API_RETRY_DELAY_MS = 2000;
+const SENSOR_NOISE_FACTOR = 0.15;
 
-/**
- * Generate a realistic sensor reading with Gaussian noise.
- * Real sensors don't produce perfectly smooth data — they have
- * small random fluctuations (noise) around the true value.
- */
 function generateNormalReading(sensor: SensorDefinition): number {
-  const mid = (sensor.normalMin + sensor.normalMax) / 2;
+  const midpoint = (sensor.normalMin + sensor.normalMax) / 2;
   const range = sensor.normalMax - sensor.normalMin;
 
   // Box-Muller transform for Gaussian distribution
@@ -36,15 +17,12 @@ function generateNormalReading(sensor: SensorDefinition): number {
   const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 
   // Scale gaussian to ±15% of range around midpoint
-  const value = mid + gaussian * (range * 0.15);
+  const value = midpoint + gaussian * range * SENSOR_NOISE_FACTOR;
 
   // Clamp to physical limits
   return Math.max(sensor.absoluteMin, Math.min(sensor.absoluteMax, Number(value.toFixed(2))));
 }
 
-/**
- * Send a batch of sensor readings for one device.
- */
 async function sendReadings(device: DeviceDefinition): Promise<void> {
   const readings = device.sensors.map((sensor) => ({
     sensorType: sensor.type,
@@ -68,9 +46,9 @@ async function sendReadings(device: DeviceDefinition): Promise<void> {
       return;
     }
 
-    const temps = readings.filter((r) => r.sensorType === 'temperature');
-    const tempStr = temps.length > 0 ? ` | temp=${temps[0].value}°C` : '';
-    console.log(`📡 [${device.id}] Sent ${readings.length} readings${tempStr}`);
+    const temperature = readings.find((reading) => reading.sensorType === 'temperature');
+    const temperatureLabel = temperature ? ` | temp=${temperature.value}°C` : '';
+    console.log(`📡 [${device.id}] Sent ${readings.length} readings${temperatureLabel}`);
   } catch (error) {
     console.error(
       `❌ [${device.id}] Failed:`,
@@ -79,9 +57,6 @@ async function sendReadings(device: DeviceDefinition): Promise<void> {
   }
 }
 
-/**
- * Main loop: send data for all devices every INTERVAL_MS.
- */
 async function main() {
   console.log('═══════════════════════════════════════════════');
   console.log('  🏭 SensorGuard IoT Simulator');
@@ -90,10 +65,20 @@ async function main() {
   console.log(`  Interval: ${INTERVAL_MS}ms`);
   console.log('═══════════════════════════════════════════════');
 
+  await waitForApi();
+
+  console.log('📡 Starting normal sensor data stream...\n');
+
+  setInterval(async () => {
+    await Promise.all(DEVICES.map(sendReadings));
+  }, INTERVAL_MS);
+}
+
+async function waitForApi() {
   // Wait for API to be ready
   console.log('⏳ Waiting for API...');
   let retries = 0;
-  while (retries < 30) {
+  while (retries < API_STARTUP_ATTEMPTS) {
     try {
       const res = await fetch(`${API_URL}/health`);
       if (res.ok) {
@@ -104,21 +89,13 @@ async function main() {
       // API not ready yet
     }
     retries++;
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, API_RETRY_DELAY_MS));
   }
 
-  if (retries >= 30) {
+  if (retries >= API_STARTUP_ATTEMPTS) {
     console.error('❌ API not available after 60 seconds. Exiting.');
     process.exit(1);
   }
-
-  // Start sending data
-  console.log('📡 Starting normal sensor data stream...\n');
-
-  setInterval(async () => {
-    // Send all devices in parallel
-    await Promise.all(DEVICES.map(sendReadings));
-  }, INTERVAL_MS);
 }
 
 main();

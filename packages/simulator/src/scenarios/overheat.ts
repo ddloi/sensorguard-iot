@@ -1,19 +1,7 @@
 import { DEVICES } from '../devices';
 import { simulatorConfig } from '../config';
 
-/**
- * OVERHEAT SCENARIO — The star of the demo.
- *
- * This script runs the "quá nhiệt động cơ" scenario:
- *
- * Phase 1 (0-30s):   Normal operation — all sensors within range
- * Phase 2 (30-90s):  Temperature RISING on MOTOR-001 — gradual increase
- * Phase 3 (90-120s): CRITICAL — temperature exceeds threshold
- * Phase 4 (120s+):   Wait for auto-remediation, then show RECOVERY
- *
- * Run this AFTER the normal simulator to show the full incident lifecycle.
- * Usage: npm run dev:scenario (from packages/simulator)
- */
+const READING_INTERVAL_MS = 5000;
 
 const API_URL = simulatorConfig.apiUrl;
 const TARGET_DEVICE = DEVICES.find((d) => d.id === 'MOTOR-001')!;
@@ -107,44 +95,8 @@ async function runScenario() {
     process.exit(1);
   }
 
-  const INTERVAL = 5_000; // Send every 5s
-
   for (const phase of PHASES) {
-    console.log(`\n${'─'.repeat(55)}`);
-    console.log(`  Phase: ${phase.name} | ${phase.description}`);
-    console.log(`  Duration: ${phase.durationMs / 1000}s`);
-    console.log(`${'─'.repeat(55)}`);
-
-    const ticks = Math.floor(phase.durationMs / INTERVAL);
-    for (let i = 0; i < ticks; i++) {
-      const progress = i / ticks; // 0.0 → 1.0
-
-      let temp: number;
-      let vib: number;
-      const rpm = addNoise(phase.rpmValue, 20);
-
-      if (phase.name === 'RISING') {
-        // Linear increase: 65°C → 95°C over the phase
-        const risingBase = 65 + progress * 30;
-        temp = addNoise(risingBase, phase.tempRange.noise);
-        vib = addNoise(phase.vibRange.base + progress * 3, phase.vibRange.noise);
-      } else if (phase.name === 'RECOVERY') {
-        // Linear decrease: 92°C → 60°C over the phase
-        const recoveryBase = 92 - progress * 32;
-        temp = addNoise(recoveryBase, phase.tempRange.noise);
-        vib = addNoise(phase.vibRange.base, phase.vibRange.noise);
-      } else {
-        temp = addNoise(phase.tempRange.base, phase.tempRange.noise);
-        vib = addNoise(phase.vibRange.base, phase.vibRange.noise);
-      }
-
-      console.log(
-        `  [${String(i + 1).padStart(2)}/${ticks}] temp=${temp}°C | vib=${vib}mm/s | rpm=${rpm}`,
-      );
-
-      await sendReading(temp, vib, rpm);
-      await sleep(INTERVAL);
-    }
+    await runPhase(phase);
   }
 
   console.log('\n═══════════════════════════════════════════════════════');
@@ -152,6 +104,50 @@ async function runScenario() {
   console.log('  Check Datadog Dashboard and SensorGuard Dashboard');
   console.log('  for the full incident timeline.');
   console.log('═══════════════════════════════════════════════════════');
+}
+
+async function runPhase(phase: Phase) {
+  console.log(`\n${'─'.repeat(55)}`);
+  console.log(`  Phase: ${phase.name} | ${phase.description}`);
+  console.log(`  Duration: ${phase.durationMs / 1000}s`);
+  console.log(`${'─'.repeat(55)}`);
+
+  const ticks = Math.floor(phase.durationMs / READING_INTERVAL_MS);
+  for (let i = 0; i < ticks; i++) {
+    const progress = i / ticks; // 0.0 → 1.0
+
+    const { temperature, vibration, rpm } = createPhaseReadings(phase, progress);
+
+    console.log(
+      `  [${String(i + 1).padStart(2)}/${ticks}] temp=${temperature}°C | vib=${vibration}mm/s | rpm=${rpm}`,
+    );
+
+    await sendReading(temperature, vibration, rpm);
+    await sleep(READING_INTERVAL_MS);
+  }
+}
+
+function createPhaseReadings(phase: Phase, progress: number) {
+  let temperature: number;
+  let vibration: number;
+  const rpm = addNoise(phase.rpmValue, 20);
+
+  if (phase.name === 'RISING') {
+    // Linear increase: 65°C → 95°C over the phase
+    const risingBase = 65 + progress * 30;
+    temperature = addNoise(risingBase, phase.tempRange.noise);
+    vibration = addNoise(phase.vibRange.base + progress * 3, phase.vibRange.noise);
+  } else if (phase.name === 'RECOVERY') {
+    // Linear decrease: 92°C → 60°C over the phase
+    const recoveryBase = 92 - progress * 32;
+    temperature = addNoise(recoveryBase, phase.tempRange.noise);
+    vibration = addNoise(phase.vibRange.base, phase.vibRange.noise);
+  } else {
+    temperature = addNoise(phase.tempRange.base, phase.tempRange.noise);
+    vibration = addNoise(phase.vibRange.base, phase.vibRange.noise);
+  }
+
+  return { temperature, vibration, rpm };
 }
 
 runScenario();

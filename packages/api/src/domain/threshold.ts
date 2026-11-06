@@ -19,3 +19,27 @@ export function selectThreshold<T extends DeviceThreshold>(
     )
   );
 }
+
+export interface ThresholdBand {
+  min: number | null;
+  max: number | null;
+}
+export interface ThresholdRule {
+  warning: ThresholdBand;
+  critical: ThresholdBand;
+}
+export interface ThresholdViolation {
+  severity: 'warning' | 'critical';
+  thresholdValue: number;
+}
+export function findThresholdViolation(
+  value: number,
+  rule: ThresholdRule,
+): ThresholdViolation | null {
+  for (const severity of ['critical', 'warning'] as const) {
+    const band = rule[severity];
+    if (band.max !== null && value >= band.max) return { severity, thresholdValue: band.max };
+    if (band.min !== null && value <= band.min) return { severity, thresholdValue: band.min };
+  }
+  return null;
+}

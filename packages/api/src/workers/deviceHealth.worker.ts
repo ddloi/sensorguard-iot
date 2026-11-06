@@ -80,7 +80,7 @@ export function startDeviceHealthWorker(): Worker {
     },
   );
 
-  worker.on('failed', (job, err) => {
+  worker.on('failed', (_job, err) => {
     logger.error('Device health check failed', { error: err.message });
   });
 

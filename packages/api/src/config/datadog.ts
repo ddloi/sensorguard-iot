@@ -2,38 +2,29 @@ import StatsD from 'hot-shots';
 import { env } from './env';
 import { logger } from '../utils/logger';
 
-/**
- * Datadog Client:
- * 1. DogStatsD (UDP:8125) when Datadog Agent is running (e.g. in Docker)
- * 2. Direct HTTPS Fallback to Datadog Cloud API (https://api.datadoghq.com)
- *    when running locally without Agent, guaranteeing metrics & logs appear in Datadog!
- */
-
 const statsd = new StatsD({
   host: process.env.DD_AGENT_HOST || 'localhost',
   port: 8125,
   prefix: 'sensorguard.',
   globalTags: [`env:${env.DD_ENV}`, `service:${env.DD_SERVICE}`],
-  errorHandler: (error) => {
+  errorHandler: () => {
     // Non-fatal, fallback to HTTP API handles delivery
   },
 });
 
 interface MetricBufferItem {
   metric: string;
-  type: 0 | 1 | 2 | 3; // 0=unspecified, 1=count, 2=rate, 3=gauge
+  type: 1 | 3;
   value: number;
   tags: string[];
   timestamp: number;
 }
 
+const METRICS_FLUSH_INTERVAL_MS = 5000;
 const metricBuffer: MetricBufferItem[] = [];
 const LOGS_ENDPOINT = `https://http-intake.logs.${env.DD_SITE}/api/v2/logs`;
 const METRICS_ENDPOINT = `https://api.${env.DD_SITE}/api/v2/series`;
 
-/**
- * Flush buffered metrics to Datadog HTTP API.
- */
 async function flushMetrics() {
   if (!env.DD_API_KEY || metricBuffer.length === 0) return;
 
@@ -61,62 +52,40 @@ async function flushMetrics() {
       const errText = await res.text();
       logger.warn('Datadog HTTP metrics flush warning', { status: res.status, errText });
     }
-  } catch (err) {
+  } catch {
     // Silent fail in case of offline network
   }
 }
 
 // Flush every 5 seconds
-setInterval(flushMetrics, 5000);
+setInterval(flushMetrics, METRICS_FLUSH_INTERVAL_MS);
+
+function bufferMetric(metric: string, sample: Pick<MetricBufferItem, 'type' | 'value' | 'tags'>) {
+  if (!env.DD_API_KEY) return;
+  metricBuffer.push({ metric, ...sample, timestamp: Math.floor(Date.now() / 1000) });
+}
 
 export const datadogMetrics = {
   increment(metric: string, value: number = 1, tags: string[] = []) {
     statsd.increment(metric, value, tags);
-    if (env.DD_API_KEY) {
-      metricBuffer.push({
-        metric,
-        type: 1, // count
-        value,
-        tags,
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-    }
+    bufferMetric(metric, { type: 1, value, tags });
   },
 
   gauge(metric: string, value: number, tags: string[] = []) {
     statsd.gauge(metric, value, tags);
-    if (env.DD_API_KEY) {
-      metricBuffer.push({
-        metric,
-        type: 3, // gauge
-        value,
-        tags,
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-    }
+    bufferMetric(metric, { type: 3, value, tags });
   },
 
   histogram(metric: string, value: number, tags: string[] = []) {
     statsd.histogram(metric, value, tags);
-    if (env.DD_API_KEY) {
-      metricBuffer.push({
-        metric,
-        type: 3, // gauge for duration
-        value,
-        tags,
-        timestamp: Math.floor(Date.now() / 1000),
-      });
-    }
+    bufferMetric(metric, { type: 3, value, tags });
   },
 };
 
-/**
- * Send an incident/alert event log directly to Datadog Logs.
- */
 export async function sendDatadogLog(
   level: 'info' | 'warn' | 'error',
   message: string,
-  attributes: Record<string, any> = {},
+  attributes: Record<string, unknown> = {},
 ) {
   if (!env.DD_API_KEY) return;
 
