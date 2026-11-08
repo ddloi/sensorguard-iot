@@ -53,13 +53,11 @@ sensorguard/
 │   └── simulator/
 │       └── src/              # Configuration, equipment and scenarios
 ├── scripts/
-│   ├── verify-stack.ts       # Read-only live preflight
-│   └── reports/              # Historical report generator
+│   └── verify-stack.ts       # Read-only live preflight
 ├── datadog/                  # Dashboard and monitor definitions
 ├── docs/                     # Architecture, development and demo guides
 │   ├── demo/
 │   ├── reference/
-│   ├── reports/
 │   └── archive/              # Historical design/pipeline material
 ├── PRODUCT.md                # Product purpose and design principles
 ├── DESIGN.md                 # Current visual system

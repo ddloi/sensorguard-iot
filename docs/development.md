@@ -54,11 +54,3 @@ Do not rerun seed merely to clear a warning. Preserve existing incident evidence
 ## Reports and historical files
 
 Current guidance is in `README.md`, `docs/architecture.md`, this document and `docs/demo/`. `PRODUCT.md` and `DESIGN.md` document product and visual decisions. Earlier pipeline/design/architecture snapshots are in `docs/archive/` and do not certify the current runtime.
-
-The existing comparison DOCX is in `docs/reports/`. Its optional historical generator requires Python and `python-docx` and accepts an explicit destination:
-
-```text
-python scripts/reports/generate_comparison_report.py --output docs/reports/comparison-copy.docx
-```
-
-Do not regenerate it as part of `check` or overwrite review artifacts incidentally.
