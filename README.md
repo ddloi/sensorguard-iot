@@ -58,6 +58,7 @@ sensorguard/
 ├── docs/                     # Architecture, development and demo guides
 │   ├── demo/
 │   ├── reference/
+│   ├── uml/                  # StarUML model and exported diagrams
 │   └── archive/              # Historical design/pipeline material
 ├── PRODUCT.md                # Product purpose and design principles
 ├── DESIGN.md                 # Current visual system
@@ -84,6 +85,7 @@ Click **Chạy demo quá nhiệt** for MOTOR-001. The dashboard opens incident h
 Sensor input, root-cause diagnosis and cooling actions are simulated. MongoDB storage, BullMQ processing and incident records use the configured services. The Datadog badge reports configuration, not proof of ingestion.
 
 - [Architecture and boundaries](docs/architecture.md)
+- [UML diagrams: 27 StarUML diagrams with images, Vietnamese](docs/uml/README.md)
 - [Development and commands](docs/development.md)
 - [Three-minute presentation, Vietnamese](docs/demo/presentation-vi.md)
 - [Demo readiness and caveats](docs/demo/readiness.md)
