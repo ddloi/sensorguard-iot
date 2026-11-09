@@ -100,7 +100,7 @@ describe('Ingest threshold-queue filter', () => {
 
 describe('Redis TLS selection', () => {
   it('follows the URL scheme in auto mode', () => {
-    expect(shouldUseTls('rediss://default:x@host.upstash.io:6379', 'auto')).toBe(true);
+    expect(shouldUseTls('rediss://host.upstash.io:6379', 'auto')).toBe(true);
     expect(shouldUseTls('redis://localhost:6379', 'auto')).toBe(false);
   });
 
