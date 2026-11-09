@@ -1,80 +1,87 @@
 {
+  "description": "Monitor mẫu cho SensorGuard. Chỉ dùng metric mà packages/api thật sự gửi (tiền tố sensorguard.). Import từng monitor: Monitors > New Monitor > Import from JSON.",
   "monitors": [
     {
-      "name": "[SensorGuard] 🌡️ Critical Temperature Breach",
+      "name": "[SensorGuard] Vượt ngưỡng critical",
       "type": "metric alert",
-      "query": "avg(last_1m):avg:sensorguard.sensor.temperature{env:development} by {device} > 85",
-      "message": "🚨 Device {{device.name}} temperature has exceeded 85°C critical threshold!\n\nCurrent: {{value}}°C\nThreshold: 85°C\n\nThe Self-Healing RemediationWorker should auto-remediate this within 30 seconds.\n\n@all",
-      "tags": ["env:development", "service:sensorguard", "team:iot"],
+      "query": "sum(last_5m):sum:sensorguard.sensor.threshold.exceeded{env:development,severity:critical} by {device}.as_count() > 0",
+      "message": "Thiết bị {{device.name}} vừa vượt ngưỡng critical ({{value}} lần trong 5 phút).\n\nSensorGuard tự mở sự cố và chạy khắc phục mô phỏng; theo dõi trạng thái trên dashboard.\n\nThêm @handle nhận thông báo (email, Slack) trước khi bật monitor.",
+      "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
-          "critical": 85,
-          "warning": 75
+          "critical": 0
         },
         "notify_no_data": false,
+        "include_tags": true,
         "renotify_interval": 60,
-        "escalation_message": "Temperature still elevated after 60 seconds — manual intervention may be required.",
-        "include_tags": true
+        "require_full_window": false
       }
     },
     {
-      "name": "[SensorGuard] 📊 Ingestion Pipeline Stall",
+      "name": "[SensorGuard] Ngừng nhận dữ liệu cảm biến",
       "type": "metric alert",
-      "query": "sum(last_5m):sum:sensorguard.ingest.received{env:development}.as_count() < 1",
-      "message": "⚠️ No telemetry data has been ingested in the last 5 minutes.\n\nPossible causes:\n- Simulator stopped\n- API server unreachable\n- MongoDB connection failure\n- Redis/BullMQ queue blocked\n\nCheck: `npm run dev:simulator` and `npm run dev:api`\n\n@all",
-      "tags": ["env:development", "service:sensorguard", "team:iot"],
+      "query": "sum(last_5m):sum:sensorguard.sensor.ingest.count{env:development}.as_count() < 1",
+      "message": "Không có mẫu dữ liệu nào trong 5 phút. Kiểm tra simulator/thiết bị, API và kết nối MongoDB, Redis.",
+      "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
           "critical": 1
         },
         "notify_no_data": true,
-        "no_data_timeframe": 10,
-        "include_tags": true
+        "include_tags": true,
+        "renotify_interval": 60,
+        "require_full_window": false,
+        "no_data_timeframe": 10
       }
     },
     {
-      "name": "[SensorGuard] 🚨 Unresolved Critical Incidents",
+      "name": "[SensorGuard] Thiết bị mất kết nối",
       "type": "metric alert",
-      "query": "avg(last_5m):sum:sensorguard.incidents.critical{env:development} > 2",
-      "message": "🔴 More than 2 critical incidents remain unresolved.\n\nCheck dashboard at http://localhost:3000 to review active incidents.\nRemediationWorker may be overloaded or stalled.\n\n@all",
-      "tags": ["env:development", "service:sensorguard", "team:iot"],
+      "query": "max(last_5m):max:sensorguard.device.count{env:development,status:offline} > 0",
+      "message": "{{value}} thiết bị không gửi dữ liệu quá 30 giây (DeviceHealthWorker đã chuyển sang offline).",
+      "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
-          "critical": 2,
-          "warning": 1
+          "critical": 0
         },
         "notify_no_data": false,
-        "include_tags": true
+        "include_tags": true,
+        "renotify_interval": 60,
+        "require_full_window": false
       }
     },
     {
-      "name": "[SensorGuard] ⚡ API Latency SLO Breach (p95 > 500ms)",
+      "name": "[SensorGuard] Job hàng đợi xử lý chậm",
       "type": "metric alert",
-      "query": "avg(last_5m):avg:sensorguard.api.latency.p95{env:development} > 500",
-      "message": "⚠️ API p95 latency has exceeded 500ms SLO.\n\nCurrent p95: {{value}}ms\n\nPossible causes:\n- MongoDB slow query\n- Heavy aggregation pipeline ($setWindowFields)\n- Redis connection timeout\n\n@all",
-      "tags": ["env:development", "service:sensorguard", "team:iot"],
+      "query": "avg(last_5m):max:sensorguard.queue.job.duration{env:development} by {queue} > 5000",
+      "message": "Hàng đợi {{queue.name}} xử lý job mất {{value}} ms. Kiểm tra Redis và MongoDB.",
+      "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
-          "critical": 500,
-          "warning": 300
+          "critical": 5000,
+          "warning": 2000
         },
         "notify_no_data": false,
-        "include_tags": true
+        "include_tags": true,
+        "renotify_interval": 60,
+        "require_full_window": false
       }
     },
     {
-      "name": "[SensorGuard] 🔧 Remediation Duration Exceeds SLA (> 30s)",
+      "name": "[SensorGuard] Xử lý sự cố quá 30 giây",
       "type": "metric alert",
-      "query": "avg(last_5m):avg:sensorguard.selfhealing.total_duration_ms{env:development} > 30000",
-      "message": "⚠️ Self-healing loop took longer than 30 seconds to recover.\n\nCurrent avg duration: {{value}}ms\nSLA target: 30,000ms (30 seconds)\n\nThe RemediationWorker may be experiencing delays in:\n- Root cause analysis\n- Device command execution\n- Recovery confirmation polling\n\n@all",
-      "tags": ["env:development", "service:sensorguard", "team:iot"],
+      "query": "max(last_15m):max:sensorguard.incident.duration{env:development} > 30",
+      "message": "Một sự cố mất {{value}} giây mới được xác nhận phục hồi (mục tiêu dưới 30 giây).\n\nNếu sự cố bị escalate, kỹ sư vận hành cần kiểm tra và bấm \"Kiểm tra phục hồi lại\".",
+      "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
-          "critical": 30000,
-          "warning": 20000
+          "critical": 30,
+          "warning": 20
         },
         "notify_no_data": false,
-        "include_tags": true
+        "include_tags": true,
+        "renotify_interval": 60,
+        "require_full_window": false
       }
     }
   ]

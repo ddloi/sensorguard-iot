@@ -1,74 +1,100 @@
 {
-  "title": "SensorGuard — Industrial IoT Operations Center",
-  "description": "Real-time monitoring dashboard for SensorGuard. Tracks sensor telemetry, incident lifecycle, auto-remediation performance, and API health. Built for MongoDB × Datadog Hackathon 2026.",
+  "title": "SensorGuard — Giám sát vận hành",
+  "description": "Dữ liệu SensorGuard gửi qua Datadog HTTP API. Chỉ có dữ liệu mới khi app đang chạy (npm run dev).",
   "layout_type": "ordered",
   "template_variables": [
     {
       "name": "env",
       "prefix": "env",
+      "available_values": [],
       "default": "development"
-    },
-    {
-      "name": "service",
-      "prefix": "service",
-      "default": "sensorguard-api"
     }
   ],
   "widgets": [
     {
       "definition": {
+        "type": "note",
+        "background_color": "white",
+        "font_size": "14",
+        "text_align": "left",
+        "vertical_align": "top",
+        "show_tick": false,
+        "tick_pos": "50%",
+        "tick_edge": "left",
+        "has_padding": true,
+        "content": "**SensorGuard** — 5 thiết bị mô phỏng gửi số đo mỗi 5 giây. Chọn khung thời gian **Past 15 Minutes** khi app đang chạy, hoặc **Past 1 Day** để xem lần chạy trước.\n\nMetric được gửi qua HTTP API (không cần Datadog Agent)."
+      }
+    },
+    {
+      "definition": {
         "type": "group",
-        "title": "🏭 Fleet Overview",
+        "title": "Tổng quan",
         "layout_type": "ordered",
+        "show_title": true,
         "widgets": [
           {
             "definition": {
               "type": "query_value",
-              "title": "Online Devices",
+              "title": "Thiết bị online",
+              "title_size": "16",
+              "title_align": "left",
               "requests": [
                 {
-                  "q": "sum:sensorguard.devices.online{env:$env}",
+                  "q": "max:sensorguard.device.count{status:online,env:$env}",
                   "aggregator": "last"
                 }
               ],
-              "precision": 0,
-              "text_align": "center"
+              "autoscale": true,
+              "precision": 0
             }
           },
           {
             "definition": {
               "type": "query_value",
-              "title": "Critical Alerts (Active)",
+              "title": "Mẫu dữ liệu đã nhận",
+              "title_size": "16",
+              "title_align": "left",
               "requests": [
                 {
-                  "q": "sum:sensorguard.incidents.critical{env:$env}",
-                  "aggregator": "last",
-                  "conditional_formats": [
-                    { "comparator": ">", "value": 0, "palette": "white_on_red" },
-                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
-                  ]
+                  "q": "sum:sensorguard.sensor.ingest.count{env:$env}.as_count()",
+                  "aggregator": "sum"
                 }
               ],
-              "precision": 0,
-              "text_align": "center"
+              "autoscale": true,
+              "precision": 0
             }
           },
           {
             "definition": {
               "type": "query_value",
-              "title": "Open Incidents",
+              "title": "Cảnh báo đã tạo",
+              "title_size": "16",
+              "title_align": "left",
               "requests": [
                 {
-                  "q": "sum:sensorguard.incidents.open{env:$env}",
-                  "aggregator": "last",
-                  "conditional_formats": [
-                    { "comparator": ">", "value": 0, "palette": "white_on_yellow" },
-                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
-                  ]
+                  "q": "sum:sensorguard.sensor.alert.triggered{env:$env}.as_count()",
+                  "aggregator": "sum"
                 }
               ],
+              "autoscale": true,
+              "precision": 0
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Thời gian xử lý sự cố gần nhất",
+              "title_size": "16",
+              "title_align": "left",
+              "requests": [
+                {
+                  "q": "max:sensorguard.incident.duration{env:$env}",
+                  "aggregator": "last"
+                }
+              ],
+              "autoscale": true,
               "precision": 0,
-              "text_align": "center"
+              "custom_unit": "giây"
             }
           }
         ]
@@ -76,166 +102,276 @@
     },
     {
       "definition": {
-        "type": "timeseries",
-        "title": "📡 Sensor Telemetry Ingestion Rate",
-        "requests": [
+        "type": "group",
+        "title": "Dữ liệu cảm biến",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
           {
-            "q": "sum:sensorguard.ingest.received{env:$env}.as_rate()",
-            "display_type": "line",
-            "style": { "palette": "cool", "line_type": "solid", "line_width": "normal" }
+            "definition": {
+              "type": "timeseries",
+              "title": "Nhiệt độ theo thiết bị (°C)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "avg:sensorguard.sensor.reading.value{sensor_type:temperature,env:$env} by {device}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
           },
           {
-            "q": "sum:sensorguard.ingest.processed{env:$env}.as_rate()",
-            "display_type": "line",
-            "style": { "palette": "warm", "line_type": "solid", "line_width": "normal" }
-          }
-        ],
-        "yaxis": { "label": "events/sec", "min": "0" },
-        "markers": [
+            "definition": {
+              "type": "timeseries",
+              "title": "MOTOR-001 — nhiệt độ và ngưỡng demo",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "avg:sensorguard.sensor.reading.value{device:motor-001,sensor_type:temperature,env:$env}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "metadata": [
+                    {
+                      "expression": "avg:sensorguard.sensor.reading.value{device:motor-001,sensor_type:temperature,env:$env}",
+                      "alias_name": "Nhiệt độ MOTOR-001"
+                    }
+                  ]
+                }
+              ],
+              "markers": [
+                {
+                  "value": "y = 85",
+                  "display_type": "error dashed",
+                  "label": "Critical 85°C"
+                },
+                {
+                  "value": "y = 80",
+                  "display_type": "warning dashed",
+                  "label": "Warning 80°C"
+                }
+              ]
+            }
+          },
           {
-            "value": "y > 100",
-            "display_type": "warning dashed",
-            "label": "High Load Threshold"
+            "definition": {
+              "type": "timeseries",
+              "title": "Độ rung theo thiết bị (mm/s)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "avg:sensorguard.sensor.reading.value{sensor_type:vibration,env:$env} by {device}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Tốc độ nhận dữ liệu (mẫu)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.sensor.ingest.count{env:$env}.as_count()",
+                  "display_type": "bars",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
           }
         ]
       }
     },
     {
       "definition": {
-        "type": "timeseries",
-        "title": "🌡️ Temperature — MOTOR-001 (Demo Target)",
-        "requests": [
+        "type": "group",
+        "title": "Phát hiện → điều tra → xử lý",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
           {
-            "q": "avg:sensorguard.sensor.temperature{device:motor-001,env:$env}",
-            "display_type": "line",
-            "style": { "palette": "orange", "line_type": "solid", "line_width": "thick" }
-          }
-        ],
-        "yaxis": { "label": "°C", "min": "0", "max": "120" },
-        "markers": [
-          {
-            "value": "y = 75",
-            "display_type": "warning dashed",
-            "label": "Warning Threshold (75°C)"
+            "definition": {
+              "type": "timeseries",
+              "title": "Vượt ngưỡng theo mức độ",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.sensor.threshold.exceeded{env:$env} by {severity}.as_count()",
+                  "display_type": "bars",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
           },
           {
-            "value": "y = 85",
-            "display_type": "error dashed",
-            "label": "Critical Threshold (85°C)"
+            "definition": {
+              "type": "timeseries",
+              "title": "Cảnh báo và khắc phục",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "sum:sensorguard.sensor.alert.triggered{env:$env}.as_count()",
+                  "display_type": "bars",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "metadata": [
+                    {
+                      "expression": "sum:sensorguard.sensor.alert.triggered{env:$env}.as_count()",
+                      "alias_name": "Cảnh báo"
+                    }
+                  ]
+                },
+                {
+                  "q": "sum:sensorguard.remediation.executed{env:$env}.as_count()",
+                  "display_type": "bars",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  },
+                  "metadata": [
+                    {
+                      "expression": "sum:sensorguard.remediation.executed{env:$env}.as_count()",
+                      "alias_name": "Khắc phục"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Thời gian xử lý sự cố (giây)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "max:sensorguard.incident.duration{env:$env}",
+                  "display_type": "bars",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Thiết bị theo trạng thái",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "max:sensorguard.device.count{env:$env} by {status}",
+                  "display_type": "area",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Thời gian xử lý job theo hàng đợi (ms)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "q": "avg:sensorguard.queue.job.duration{env:$env} by {queue}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
           }
         ]
       }
     },
     {
       "definition": {
-        "type": "timeseries",
-        "title": "🚨 Incident Lifecycle (Open vs Resolved)",
-        "requests": [
+        "type": "group",
+        "title": "Nhật ký",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
           {
-            "q": "sum:sensorguard.incidents.open{env:$env}",
-            "display_type": "bars",
-            "style": { "palette": "warm" }
-          },
-          {
-            "q": "sum:sensorguard.incidents.resolved{env:$env}.as_count()",
-            "display_type": "bars",
-            "style": { "palette": "cool" }
-          }
-        ],
-        "yaxis": { "min": "0" }
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "🔧 Auto-Remediation Execution",
-        "requests": [
-          {
-            "q": "sum:sensorguard.remediation.executed{env:$env}.as_count()",
-            "display_type": "bars",
-            "style": { "palette": "purple" }
-          },
-          {
-            "q": "avg:sensorguard.remediation.duration_ms{env:$env}",
-            "display_type": "line",
-            "style": { "palette": "grey", "line_type": "dashed" }
-          }
-        ],
-        "yaxis": { "label": "count / ms" }
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "⚡ API Latency (p50 / p95 / p99)",
-        "requests": [
-          {
-            "q": "avg:sensorguard.api.latency.p50{env:$env}",
-            "display_type": "line",
-            "style": { "palette": "cool", "line_type": "solid" }
-          },
-          {
-            "q": "avg:sensorguard.api.latency.p95{env:$env}",
-            "display_type": "line",
-            "style": { "palette": "warm", "line_type": "dashed" }
-          },
-          {
-            "q": "avg:sensorguard.api.latency.p99{env:$env}",
-            "display_type": "line",
-            "style": { "palette": "warm", "line_type": "dotted" }
-          }
-        ],
-        "yaxis": { "label": "ms", "min": "0" },
-        "markers": [
-          {
-            "value": "y > 500",
-            "display_type": "error dashed",
-            "label": "SLO Breach (500ms)"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "📦 BullMQ Queue Depth",
-        "requests": [
-          {
-            "q": "sum:sensorguard.queue.threshold_check.waiting{env:$env}",
-            "display_type": "area",
-            "style": { "palette": "cool" }
-          },
-          {
-            "q": "sum:sensorguard.queue.alert_process.waiting{env:$env}",
-            "display_type": "area",
-            "style": { "palette": "warm" }
-          },
-          {
-            "q": "sum:sensorguard.queue.remediation.waiting{env:$env}",
-            "display_type": "area",
-            "style": { "palette": "purple" }
-          }
-        ],
-        "yaxis": { "label": "jobs", "min": "0" }
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "🔄 Self-Healing Loop Duration (End-to-End)",
-        "requests": [
-          {
-            "q": "avg:sensorguard.selfhealing.total_duration_ms{env:$env}",
-            "display_type": "line",
-            "style": { "palette": "green", "line_type": "solid", "line_width": "thick" }
-          }
-        ],
-        "yaxis": { "label": "ms", "min": "0" },
-        "markers": [
-          {
-            "value": "y > 30000",
-            "display_type": "warning dashed",
-            "label": "Target SLA: 30s recovery"
+            "definition": {
+              "type": "log_stream",
+              "title": "Log cảnh báo và sự cố",
+              "title_size": "16",
+              "title_align": "left",
+              "query": "service:sensorguard",
+              "indexes": [],
+              "columns": ["host", "service"],
+              "message_display": "expanded-md",
+              "show_date_column": true,
+              "show_message_column": true,
+              "sort": {
+                "column": "time",
+                "order": "desc"
+              }
+            }
           }
         ]
       }

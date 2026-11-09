@@ -105,6 +105,7 @@ Sensor input, root-cause diagnosis and cooling actions are simulated. MongoDB st
 
 - [Architecture and boundaries](docs/architecture.md)
 - [UML diagrams: 27 StarUML diagrams with images, Vietnamese](docs/uml/README.md)
+- [Datadog dashboard, monitors and metric list, Vietnamese](datadog/README.md)
 - [Development and commands](docs/development.md)
 - [Three-minute presentation, Vietnamese](docs/demo/presentation-vi.md)
 - [Demo readiness and caveats](docs/demo/readiness.md)
