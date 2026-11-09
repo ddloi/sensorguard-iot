@@ -57,6 +57,12 @@ The Vite development server and Nginx container both forward `/api`, `/health` a
 
 ## Tests and verification
 
-Unit tests cover domain rules, validation and service health. Route integration tests use Fastify injection with mocked database/queue dependencies; they do not constitute a real database integration test. `npm run verify` separately checks running services and real data without mutating the database.
+Unit tests cover domain rules, validation and service health. Route integration tests use Fastify injection with mocked database/queue dependencies. `tests/mongo` runs against a real MongoDB server (CI service container): time series creation, `$setWindowFields` aggregation, recovery evidence lookup and the threshold unique index. `npm run verify` separately checks running services and real data without mutating the database.
+
+## Ingest and Redis budget
+
+`POST /api/ingest` stores every batch, then calls `needsThresholdCheck` (`src/domain/threshold.ts`). A threshold job is queued only for a rule violation, a warning/offline device that may need restoring, or an active warning alert. Critical and maintenance devices are handled by the incident workflow, which reads fresh telemetry from MongoDB. Device context is cached for 5 seconds and thresholds for 30 seconds. Workers share `WORKER_TUNING` (`src/config/bullmq.ts`) so idle polling stays cheap on Upstash, where commands inside BullMQ's Lua scripts are billed.
+
+When `DEVICE_API_KEY` is set, ingest requires a matching `x-device-key` header. The dashboard demo uses `POST /api/demo/overheat`, which injects a fixed sample on the server.
 
 The API still starts workers in the same process. This is practical for the hackathon; splitting API and workers into separately deployed processes is a future scaling decision, not a prerequisite for the demo.

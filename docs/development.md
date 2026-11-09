@@ -23,8 +23,11 @@ Do not commit `.env`, local installers or connection strings. `.local/` holds ma
 | `npm run format`            | Format supported source, configuration and current documentation       |
 | `npm run format:check`      | Fail on formatting drift                                               |
 | `npm run seed`              | Delete and replace initial demo devices/rules/alerts/incidents         |
+| `npm run test:mongo`        | Real MongoDB tests in a throwaway database; needs `MONGODB_TEST_URI`   |
+| `npm run redis:local`       | Start Redis 7 in Docker on port 6379 for quota-free rehearsals         |
+| `npm run redis:local:stop`  | Remove the local Redis container                                       |
 
-Run `npm run check` before review. CI executes builds, type checks, tests and formatting and must fail on a failed check. The manual diagnostic at `packages/api/scripts/dev/debug-threshold.ts` creates a queue job; it is deliberately excluded from routine tests/checks.
+Run `npm run check` before review. CI executes builds, type checks, tests, formatting and the real MongoDB job, and must fail on a failed check. The manual diagnostic at `packages/api/scripts/dev/debug-threshold.ts` creates a queue job; it is deliberately excluded from routine tests/checks.
 
 ## Configuration and working directories
 

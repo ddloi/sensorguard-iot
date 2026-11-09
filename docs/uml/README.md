@@ -18,13 +18,13 @@ Toàn bộ sơ đồ dùng **đen trắng cơ bản**: nền trắng, viền và
 
 ### 02 · Sơ đồ hoạt động (Activity)
 
-| Sơ đồ                       | Nội dung                                                                                                                 | File code                                |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| [ACT-01](images/ACT-01.png) | Tiếp nhận dữ liệu cảm biến: kiểm tra payload → lỗi 400/404 → lưu → gửi song song Datadog và WebSocket → đưa vào hàng đợi | `routes/ingest.ts`                       |
-| [ACT-02](images/ACT-02.png) | Đánh giá ngưỡng, tạo cảnh báo; chỉ mức **critical** mới mở sự cố, có chống trùng                                         | `threshold.worker.ts`, `alert.worker.ts` |
-| [ACT-03](images/ACT-03.png) | Khắc phục mô phỏng, xác minh mỗi 8 giây, tối đa 6 lần rồi chuyển lên cấp cao hơn (escalate)                              | `remediation.worker.ts`                  |
-| [ACT-04](images/ACT-04.png) | Chạy demo quá nhiệt từ dashboard, chờ tối đa 60 giây                                                                     | `useIncidentActions.ts`                  |
-| [ACT-05](images/ACT-05.png) | Yêu cầu kiểm tra phục hồi lại, các mã trả về 400/404/409/503/202                                                         | `incident-recovery.ts`                   |
+| Sơ đồ                       | Nội dung                                                                                                                                              | File code                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [ACT-01](images/ACT-01.png) | Tiếp nhận dữ liệu cảm biến: key thiết bị (401) → kiểm tra payload (400/404) → lưu → gửi song song Datadog và WebSocket → chỉ đưa vào hàng đợi khi cần | `routes/ingest.ts`, `domain/threshold.ts` |
+| [ACT-02](images/ACT-02.png) | Đánh giá ngưỡng, tạo cảnh báo; chỉ mức **critical** mới mở sự cố, có chống trùng                                                                      | `threshold.worker.ts`, `alert.worker.ts`  |
+| [ACT-03](images/ACT-03.png) | Khắc phục mô phỏng, xác minh mỗi 8 giây, tối đa 6 lần rồi chuyển lên cấp cao hơn (escalate)                                                           | `remediation.worker.ts`                   |
+| [ACT-04](images/ACT-04.png) | Chạy demo quá nhiệt từ dashboard, chờ tối đa 60 giây                                                                                                  | `useIncidentActions.ts`                   |
+| [ACT-05](images/ACT-05.png) | Yêu cầu kiểm tra phục hồi lại, các mã trả về 400/404/409/503/202                                                                                      | `incident-recovery.ts`                    |
 
 ### 03 · Sơ đồ tuần tự (Sequence)
 
@@ -74,7 +74,9 @@ Toàn bộ sơ đồ dùng **đen trắng cơ bản**: nền trắng, viền và
 - **Chỉ cảnh báo critical mới mở sự cố.** Mức warning chỉ tạo cảnh báo và đổi trạng thái thiết bị.
 - **Trạng thái `investigating` chỉ xuất hiện khi escalate**, tức là sau 6 lần xác minh thất bại. Quá trình khắc phục chuyển thẳng `open → mitigating`.
 - **Phục hồi phải có bằng chứng:** số đo phải mới hơn lúc mở sự cố, không cũ quá 30 giây, và nằm trong cả dải warning lẫn critical. Chỉ hẹn giờ thì không đủ.
-- **Nút demo chỉ gửi một lần số đo quá nhiệt.** Thiết bị phục hồi được là nhờ Simulator tiếp tục gửi số đo bình thường.
+- **Nút demo chỉ gửi một lần số đo quá nhiệt** qua `POST /api/demo/overheat` (server tự ghi mẫu, trình duyệt không cần key). Thiết bị phục hồi được là nhờ Simulator tiếp tục gửi số đo bình thường.
+- **Số đo bình thường không vào hàng đợi.** API tự so ngưỡng; chỉ khi có vi phạm, thiết bị đang warning/offline hoặc còn cảnh báo warning mới tạo job. Nhờ vậy lệnh Redis trên Upstash giảm từ khoảng 3.280 xuống khoảng 190 mỗi phút.
+- **Key thiết bị tùy chọn:** khi đặt `DEVICE_API_KEY`, `/api/ingest` yêu cầu header `x-device-key`.
 - **API và worker chạy chung một tiến trình.** Tách riêng là việc để mở rộng về sau.
 - API đã có `PATCH /api/alerts/:id/ack`, `PATCH /api/devices/:id` và `GET /api/analytics/anomalies`, nhưng dashboard chưa dùng. Các sơ đồ ghi rõ là "API, chưa có trên giao diện".
 

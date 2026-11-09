@@ -24,6 +24,22 @@ Open [the dashboard](http://localhost:3000). The API listens on port 3001 and th
 npm run verify
 ```
 
+### Redis usage and local Redis
+
+BullMQ runs its queue logic in Lua scripts, and Upstash bills every command inside a script. To keep the free quota usable, the API compares each batch with the thresholds itself and only queues a threshold job when a reading violates a rule, a warning or offline device needs restoring, or a warning alert is still active. Idle workers also wait longer between polls. Measured on Upstash with the simulator running: about 3,280 commands per minute before, about 190 after.
+
+For rehearsals without any quota, run Redis in Docker and point the app at it:
+
+```bash
+npm run redis:local
+```
+
+Then set `UPSTASH_REDIS_URL=redis://localhost:6379` in `.env`. TLS follows the URL scheme (`rediss://` uses TLS). Stop it with `npm run redis:local:stop`.
+
+### Device key
+
+Set `DEVICE_API_KEY` in `.env` to require the header `x-device-key` on `POST /api/ingest`; the simulator sends it automatically. The dashboard demo button calls `POST /api/demo/overheat`, which injects a fixed MOTOR-001 sample on the server, so the browser never holds the key. When the variable is empty, ingest stays open for local demos and the API logs a warning.
+
 ## Project layout
 
 ```text
@@ -73,10 +89,11 @@ The three workspaces are independently buildable. Domain rules do not import Fas
 ```bash
 npm run check         # Types, unit/integration tests, builds and formatting
 npm run verify        # Running API, data, WebSocket and dashboard checks
+npm run test:mongo    # Real MongoDB tests; needs MONGODB_TEST_URI (uses a throwaway database)
 npm run format        # Apply consistent formatting
 ```
 
-`check` requires no cloud credentials or running database. `verify` needs the stack running and does not trigger an incident or reset data. CI fails when tests or formatting fail.
+`check` requires no cloud credentials or running database. `verify` needs the stack running and does not trigger an incident or reset data. `test:mongo` is skipped unless `MONGODB_TEST_URI` is set; CI runs it against a MongoDB 7 service container. CI fails when tests or formatting fail.
 
 ## Demo
 
