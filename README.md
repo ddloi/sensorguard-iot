@@ -36,6 +36,8 @@ npm run redis:local
 
 Then set `UPSTASH_REDIS_URL=redis://localhost:6379` in `.env`. TLS follows the URL scheme (`rediss://` uses TLS). Stop it with `npm run redis:local:stop`.
 
+Without Docker, Windows users with an Ubuntu WSL distro can install Redis there once (`sudo apt install redis-server`) and keep it running in a separate terminal with `npm run redis:wsl`; WSL forwards `localhost:6379` to Windows.
+
 ### Device key
 
 Set `DEVICE_API_KEY` in `.env` to require the header `x-device-key` on `POST /api/ingest`; the simulator sends it automatically. The dashboard demo button calls `POST /api/demo/overheat`, which injects a fixed MOTOR-001 sample on the server, so the browser never holds the key. When the variable is empty, ingest stays open for local demos and the API logs a warning.
