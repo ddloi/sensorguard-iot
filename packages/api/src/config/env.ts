@@ -14,6 +14,15 @@ const envSchema = z.object({
   // Upstash Redis
   UPSTASH_REDIS_URL: z.string().min(1, 'UPSTASH_REDIS_URL is required'),
   UPSTASH_REDIS_TOKEN: z.string().optional(),
+  // TLS follows the URL scheme by default: rediss:// (Upstash) uses TLS, redis:// (local) does not.
+  REDIS_TLS: z.enum(['auto', 'true', 'false']).default('auto'),
+
+  // Device credential for POST /api/ingest. When unset, ingest stays open (local demo only).
+  DEVICE_API_KEY: z
+    .string()
+    .min(16, 'DEVICE_API_KEY must be at least 16 characters')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
 
   // Datadog
   DD_API_KEY: z.string().optional(),

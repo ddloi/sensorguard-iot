@@ -43,3 +43,38 @@ export function findThresholdViolation(
   }
   return null;
 }
+
+export interface ThresholdCheckContext<T extends DeviceThreshold & ThresholdRule> {
+  deviceId: string;
+  deviceType: string;
+  deviceStatus: string;
+  hasActiveWarning: boolean;
+  thresholds: T[];
+}
+
+/** Statuses the threshold worker restores to online when normal readings arrive. */
+const RESTORABLE_STATUSES = new Set(['warning', 'offline']);
+
+/**
+ * Decide whether a batch needs the threshold worker.
+ *
+ * The worker only changes state when a reading violates a rule, or when an earlier state
+ * must be cleared: a warning/offline device to restore, or a warning alert still active.
+ * Critical and maintenance devices are owned by the incident workflow, which reads fresh
+ * telemetry from MongoDB itself. Everything else skips the queue to save Redis commands.
+ */
+export function needsThresholdCheck<T extends DeviceThreshold & ThresholdRule>(
+  readings: Array<{ sensorType: string; value: number }>,
+  context: ThresholdCheckContext<T>,
+): boolean {
+  if (RESTORABLE_STATUSES.has(context.deviceStatus) || context.hasActiveWarning) return true;
+  return readings.some((reading) => {
+    const rule = selectThreshold(
+      context.thresholds,
+      context.deviceId,
+      context.deviceType,
+      reading.sensorType,
+    );
+    return rule !== undefined && findThresholdViolation(reading.value, rule) !== null;
+  });
+}

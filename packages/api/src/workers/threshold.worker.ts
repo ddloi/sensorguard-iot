@@ -1,5 +1,6 @@
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../config/redis';
+import { WORKER_TUNING } from '../config/bullmq';
 import { Threshold, Device, Alert, Incident } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, startTimer } from '../config/datadog';
@@ -64,6 +65,7 @@ export function startThresholdWorker(): Worker {
     },
     {
       connection,
+      ...WORKER_TUNING,
       concurrency: 5,
     },
   );

@@ -1,5 +1,5 @@
 import { DEVICES } from '../devices';
-import { simulatorConfig } from '../config';
+import { simulatorConfig, ingestHeaders } from '../config';
 
 const READING_INTERVAL_MS = 5000;
 
@@ -64,7 +64,7 @@ async function sendReading(temp: number, vibration: number, rpm: number): Promis
   try {
     const res = await fetch(`${API_URL}/api/ingest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ingestHeaders(),
       body: JSON.stringify({ deviceId: TARGET_DEVICE.id, readings }),
     });
 

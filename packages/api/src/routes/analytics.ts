@@ -106,7 +106,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
   });
 }
 
-function buildTimeSeriesPipeline({
+export function buildTimeSeriesPipeline({
   deviceId,
   sensorType,
   minutes,

@@ -1,5 +1,5 @@
 import { DEVICES, DeviceDefinition, SensorDefinition } from './devices';
-import { simulatorConfig } from './config';
+import { simulatorConfig, ingestHeaders } from './config';
 
 const API_URL = simulatorConfig.apiUrl;
 const INTERVAL_MS = simulatorConfig.intervalMs;
@@ -34,7 +34,7 @@ async function sendReadings(device: DeviceDefinition): Promise<void> {
   try {
     const response = await fetch(`${API_URL}/api/ingest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ingestHeaders(),
       body: JSON.stringify({
         deviceId: device.id,
         readings,

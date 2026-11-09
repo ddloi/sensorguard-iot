@@ -47,19 +47,11 @@ export async function fetchHealth(signal: AbortSignal): Promise<Health> {
   return health;
 }
 
+/** The server injects a fixed 92.4°C sample for MOTOR-001; the browser holds no device key. */
 export async function triggerOverheat(): Promise<void> {
-  const response = await fetch('/api/ingest', {
+  const response = await fetch('/api/demo/overheat', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     signal: AbortSignal.timeout(10_000),
-    body: JSON.stringify({
-      deviceId: 'MOTOR-001',
-      readings: [
-        { sensorType: 'temperature', value: 92.4, unit: 'celsius', quality: 'good' },
-        { sensorType: 'vibration', value: 6.8, unit: 'mm/s', quality: 'good' },
-        { sensorType: 'rpm', value: 1450, unit: 'rpm', quality: 'good' },
-      ],
-    }),
   });
   if (!response.ok) throw new ApiError(response.status);
 }

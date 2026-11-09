@@ -1,6 +1,7 @@
 import type { Types } from 'mongoose';
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../config/redis';
+import { WORKER_TUNING } from '../config/bullmq';
 import { Alert, Device, Incident } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, sendDatadogLog, startTimer } from '../config/datadog';
@@ -31,6 +32,7 @@ export function startAlertWorker(): Worker {
     },
     {
       connection,
+      ...WORKER_TUNING,
       concurrency: 5, // Process up to 5 alerts concurrently without global queue freeze
     },
   );

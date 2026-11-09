@@ -15,6 +15,7 @@ import { alertRoutes } from './routes/alerts';
 import { incidentRoutes } from './routes/incidents';
 import { analyticsRoutes } from './routes/analytics';
 import { websocketRoutes } from './routes/ws';
+import { demoRoutes } from './routes/demo';
 import { logger } from './utils/logger';
 import { getRedisConnection } from './config/redis';
 import { getServiceHealth } from './services/health';
@@ -65,6 +66,7 @@ export async function buildServer() {
   await fastify.register(incidentRoutes);
   await fastify.register(analyticsRoutes);
   await fastify.register(websocketRoutes);
+  await fastify.register(demoRoutes);
 
   const { deviceHealthQueue } = getQueues();
   await deviceHealthQueue.add(

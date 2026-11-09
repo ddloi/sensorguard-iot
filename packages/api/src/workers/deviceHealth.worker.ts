@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
 import { createRedisConnection } from '../config/redis';
+import { WORKER_TUNING } from '../config/bullmq';
 import { Device } from '../models';
 import { datadogMetrics } from '../config/datadog';
 import { logger } from '../utils/logger';
@@ -76,6 +77,7 @@ export function startDeviceHealthWorker(): Worker {
     },
     {
       connection,
+      ...WORKER_TUNING,
       concurrency: 1,
     },
   );

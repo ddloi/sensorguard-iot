@@ -1,6 +1,7 @@
 import type { IIncident } from '../models/Incident';
 import { Worker, Job } from 'bullmq';
 import { createRedisConnection } from '../config/redis';
+import { WORKER_TUNING } from '../config/bullmq';
 import { Device, Incident, Alert, SensorData, Threshold } from '../models';
 import { getQueues } from '../queues';
 import { datadogMetrics, sendDatadogLog, startTimer } from '../config/datadog';
@@ -43,6 +44,7 @@ export function startRemediationWorker(): Worker {
     },
     {
       connection,
+      ...WORKER_TUNING,
       concurrency: 5,
     },
   );

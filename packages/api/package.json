@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "tsx scripts/seed.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:mongo": "vitest run tests/mongo"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
