@@ -1,0 +1,42 @@
+# Keeps the hosted demo on Render awake so the simulator keeps sending data
+# to MongoDB and Datadog, and runs the overheat demo once an hour so the
+# incident widgets on the public Datadog dashboard have data.
+# Disable this workflow in GitHub Actions after judging ends.
+name: Keep live demo awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      run_demo:
+        description: 'Also run the overheat demo now'
+        type: boolean
+        default: true
+
+permissions: {}
+
+env:
+  DEMO_URL: https://sensorguard-hnnh.onrender.com
+
+jobs:
+  ping:
+    name: Wake Render and run hourly demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Wake the service
+        run: curl -fsS --retry 6 --retry-delay 20 --retry-all-errors --max-time 90 "$DEMO_URL/health"
+
+      - name: Run the overheat demo (once an hour)
+        env:
+          MANUAL_DEMO: ${{ github.event_name == 'workflow_dispatch' && inputs.run_demo }}
+        run: |
+          minute=$(date -u +%M)
+          if [ "$MANUAL_DEMO" = "true" ] || [ "$((10#$minute))" -lt 10 ]; then
+            curl -fsS -X POST --max-time 30 "$DEMO_URL/api/demo/overheat"
+            echo
+            echo "Overheat demo triggered at $(date -u +%H:%M) UTC"
+          else
+            echo "Skip demo this run (minute $minute)"
+          fi

@@ -25,7 +25,7 @@ Bản demo trực tuyến chạy trên Render bằng file [`render.yaml`](../ren
 
 ## Lưu ý
 
-- **Ngủ khi không dùng:** gói miễn phí tắt dịch vụ sau 15 phút không có người truy cập. Lần mở tiếp theo chờ khoảng 1 phút để khởi động; simulator và dữ liệu chạy lại từ đó.
+- **Ngủ khi không dùng:** gói miễn phí tắt dịch vụ sau 15 phút không có người truy cập. Lần mở tiếp theo chờ khoảng 1 phút để khởi động; simulator và dữ liệu chạy lại từ đó. Trong thời gian chấm, workflow `.github/workflows/keep-demo-alive.yml` gọi `/health` mỗi 10 phút để dịch vụ không ngủ và chạy demo quá nhiệt mỗi giờ một lần; tắt workflow này trong tab Actions của GitHub sau khi chấm xong. Gói miễn phí có 750 giờ chạy mỗi tháng, đủ cho một dịch vụ chạy liên tục.
 - **Không đăng nhập (chủ đích):** ai có link đều xem được dashboard và bấm được nút demo. Nút demo chỉ ghi một mẫu cố định cho MOTOR-001. Cổng nhận dữ liệu `/api/ingest` cần key thiết bị.
 - **Dữ liệu dùng chung:** bản host và bản chạy trên máy cùng ghi vào một cơ sở dữ liệu Atlas. Không chạy `npm run seed` khi bản host đang chạy.
 - **Kiểm tra sau khi deploy:** mở `https://<link>/health` (phải thấy `"mongodb":"connected","redis":"connected"`), sau đó mở trang chính và bấm "Chạy demo quá nhiệt".

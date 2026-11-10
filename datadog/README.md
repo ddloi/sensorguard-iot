@@ -2,7 +2,7 @@
 
 Thư mục này chứa dashboard và monitor mẫu. Cả hai chỉ dùng metric mà `packages/api` thật sự gửi lên Datadog.
 
-**Xem dashboard thật (không cần tài khoản Datadog):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4). Dữ liệu đến từ bản demo trên Render; bản miễn phí ngủ sau 15 phút không có truy cập, nên hãy mở [link demo](https://sensorguard-hnnh.onrender.com) trước vài phút, hoặc chọn **Past 1 Day** để xem lần chạy trước.
+**Xem dashboard thật (không cần tài khoản Datadog):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4). Dữ liệu đến từ [bản demo trên Render](https://sensorguard-hnnh.onrender.com). Workflow `keep-demo-alive.yml` giữ dịch vụ thức (gọi mỗi 10 phút) và chạy demo quá nhiệt mỗi giờ, nên biểu đồ cảm biến liên tục và các ô cảnh báo, sự cố luôn có dữ liệu.
 
 ## Cách app gửi dữ liệu
 

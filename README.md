@@ -24,7 +24,7 @@ Reused components, data sources and AI tools are declared in [docs/declarations.
 
 **https://sensorguard-hnnh.onrender.com** · press **Chạy demo quá nhiệt** to watch detect → investigate → resolve (about 13 seconds). Health check: [/health](https://sensorguard-hnnh.onrender.com/health).
 
-**Datadog dashboard (public, no login):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4), fed by the hosted demo. Open the demo first if the charts are empty, or pick **Past 1 Day**.
+**Datadog dashboard (public, no login):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4), fed by the hosted demo. A scheduled workflow ([`keep-demo-alive.yml`](.github/workflows/keep-demo-alive.yml)) pings the service every 10 minutes so data keeps flowing, and runs the overheat demo once an hour so the incident charts are not empty.
 
 The hosted demo runs on Render from [`render.yaml`](render.yaml): one free web service (API, workers, dashboard and simulator) plus a free Key Value instance for BullMQ. See [docs/deploy-render.md](docs/deploy-render.md) for the setup steps and limits; the free service sleeps after 15 idle minutes and takes about a minute to wake.
 
