@@ -22,6 +22,8 @@ Reused components, data sources and AI tools are declared in [docs/declarations.
 
 ## Live demo
 
+**https://sensorguard-hnnh.onrender.com** · press **Chạy demo quá nhiệt** to watch detect → investigate → resolve (about 13 seconds). Health check: [/health](https://sensorguard-hnnh.onrender.com/health).
+
 The hosted demo runs on Render from [`render.yaml`](render.yaml): one free web service (API, workers, dashboard and simulator) plus a free Key Value instance for BullMQ. See [docs/deploy-render.md](docs/deploy-render.md) for the setup steps and limits; the free service sleeps after 15 idle minutes and takes about a minute to wake.
 
 ## Run locally

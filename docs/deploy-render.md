@@ -1,5 +1,7 @@
 # Triển khai demo lên Render
 
+**Link demo:** https://sensorguard-hnnh.onrender.com (kiểm tra nhanh: https://sensorguard-hnnh.onrender.com/health)
+
 Bản demo trực tuyến chạy trên Render bằng file [`render.yaml`](../render.yaml):
 
 | Thành phần                    | Gói    | Ghi chú                                                                                                   |
