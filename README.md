@@ -2,6 +2,28 @@
 
 Industrial IoT monitoring demo for the MongoDB × Datadog Hackathon: simulated sensor data, time-series analytics, incident processing and evidence-based recovery.
 
+## Architecture
+
+[![SensorGuard component architecture](docs/uml/images/ARC-01.png)](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-01.png)
+
+Direct links to the architecture diagrams:
+
+| Diagram                                      | Link                                                                                            |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Components and data flow                     | [ARC-01](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-01.png)         |
+| Docker deployment                            | [ARC-02](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-02.png)         |
+| MongoDB data model                           | [ARC-04](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-04.png)         |
+| BullMQ queue pipeline                        | [ARC-05](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-05.png)         |
+| Datadog observability                        | [ARC-06](https://github.com/ddloi/sensorguard-iot/blob/main/docs/uml/images/ARC-06.png)         |
+| All 27 UML diagrams (StarUML model + images) | [docs/uml](https://github.com/ddloi/sensorguard-iot/tree/main/docs/uml)                         |
+| Written architecture and boundaries          | [docs/architecture.md](https://github.com/ddloi/sensorguard-iot/blob/main/docs/architecture.md) |
+
+Reused components, data sources and AI tools are declared in [docs/declarations.md](docs/declarations.md).
+
+## Live demo
+
+The hosted demo runs on Render from [`render.yaml`](render.yaml): one free web service (API, workers, dashboard and simulator) plus a free Key Value instance for BullMQ. See [docs/deploy-render.md](docs/deploy-render.md) for the setup steps and limits; the free service sleeps after 15 idle minutes and takes about a minute to wake.
+
 ## Run locally
 
 Use Node.js 20+ and npm 10+. MongoDB Atlas and Redis are external services. Datadog is optional for local monitoring; verify actual delivery before presenting its integration.

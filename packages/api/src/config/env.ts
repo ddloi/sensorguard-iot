@@ -33,6 +33,8 @@ const envSchema = z.object({
   // API
   API_PORT: z.string().default('3001').transform(Number),
   API_HOST: z.string().default('0.0.0.0'),
+  // Hosted single-service mode: the API also serves packages/dashboard/dist.
+  SERVE_DASHBOARD: z.enum(['true', 'false']).default('false'),
 });
 
 function loadEnv() {

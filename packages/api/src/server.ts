@@ -16,6 +16,7 @@ import { incidentRoutes } from './routes/incidents';
 import { analyticsRoutes } from './routes/analytics';
 import { websocketRoutes } from './routes/ws';
 import { demoRoutes } from './routes/demo';
+import { registerDashboard } from './routes/dashboard';
 import { logger } from './utils/logger';
 import { getRedisConnection } from './config/redis';
 import { getServiceHealth } from './services/health';
@@ -67,6 +68,8 @@ export async function buildServer() {
   await fastify.register(analyticsRoutes);
   await fastify.register(websocketRoutes);
   await fastify.register(demoRoutes);
+  // Called directly (not as a plugin) so the SPA not-found handler applies to the root.
+  if (env.SERVE_DASHBOARD === 'true') await registerDashboard(fastify);
 
   const { deviceHealthQueue } = getQueues();
   await deviceHealthQueue.add(

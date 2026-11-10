@@ -1,0 +1,50 @@
+# Render Blueprint: one free web service (API + workers + dashboard + simulator)
+# and one free Key Value instance (Redis for BullMQ).
+# Deploy: Render Dashboard > New > Blueprint > select this repository.
+# Secrets marked sync: false are entered once in the Render dashboard.
+services:
+  - type: web
+    name: sensorguard
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node scripts/start-hosted.mjs
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: SERVE_DASHBOARD
+        value: 'true'
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: sensorguard
+      - key: UPSTASH_REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sensorguard-redis
+          property: connectionString
+      - key: DEVICE_API_KEY
+        generateValue: true
+      - key: DD_API_KEY
+        sync: false
+      - key: DD_SITE
+        value: us5.datadoghq.com
+      - key: DD_SERVICE
+        value: sensorguard
+      - key: DD_ENV
+        value: development
+      # No Datadog Agent on Render: metrics and logs go through the HTTP API.
+      - key: DD_TRACE_ENABLED
+        value: 'false'
+      - key: DD_PROFILING_ENABLED
+        value: 'false'
+
+  - type: keyvalue
+    name: sensorguard-redis
+    plan: free
+    region: singapore
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # internal connections from Render services only

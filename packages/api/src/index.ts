@@ -17,7 +17,8 @@ tracer.init({
   env: process.env.DD_ENV || 'development',
   logInjection: true, // Auto-inject trace_id into Winston logs
   runtimeMetrics: true, // Node.js runtime metrics (GC, event loop, etc.)
-  profiling: true,
+  // Profiling needs a Datadog Agent; hosted demos without one set DD_PROFILING_ENABLED=false.
+  profiling: process.env.DD_PROFILING_ENABLED !== 'false',
 });
 
 // --- Now import everything else ---
