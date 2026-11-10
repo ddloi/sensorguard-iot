@@ -2,6 +2,8 @@
 
 Thư mục này chứa dashboard và monitor mẫu. Cả hai chỉ dùng metric mà `packages/api` thật sự gửi lên Datadog.
 
+**Xem dashboard thật (không cần tài khoản Datadog):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4). Dữ liệu đến từ bản demo trên Render; bản miễn phí ngủ sau 15 phút không có truy cập, nên hãy mở [link demo](https://sensorguard-hnnh.onrender.com) trước vài phút, hoặc chọn **Past 1 Day** để xem lần chạy trước.
+
 ## Cách app gửi dữ liệu
 
 - **Metrics:** gửi qua Datadog HTTP API mỗi 5 giây khi có `DD_API_KEY`; không cần Datadog Agent. Nếu có Agent (chạy Docker Compose), metric cũng đi qua DogStatsD cổng 8125.
