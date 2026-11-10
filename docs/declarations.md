@@ -36,7 +36,7 @@ Tài liệu này liệt kê những gì SensorGuard (đội Reliops) dùng lại
 | StarUML                                     | Phần mềm thương mại (bản dùng thử) | Vẽ 27 sơ đồ UML                         |
 | Playwright (playwright-core), ffmpeg-static | Apache-2.0 / GPL (binary ffmpeg)   | Quay và dựng video demo                 |
 | docx (npm), Microsoft Word                  | MIT / thương mại                   | Tạo báo cáo Word và xuất PDF            |
-| python-pptx                                 | MIT                                | Tạo slide thuyết trình                  |
+| pptxgenjs, Microsoft PowerPoint             | MIT / thương mại                   | Tạo slide thuyết trình                  |
 
 ### 1.3. Dịch vụ bên ngoài
 
