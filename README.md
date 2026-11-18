@@ -24,9 +24,29 @@ Reused components, data sources and AI tools are declared in [docs/declarations.
 
 **https://sensorguard-hnnh.onrender.com** · press **Chạy demo quá nhiệt** to watch detect → investigate → resolve (about 13 seconds). Health check: [/health](https://sensorguard-hnnh.onrender.com/health).
 
-**Datadog dashboard (public, no login):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4), fed by the hosted demo. A scheduled workflow ([`keep-demo-alive.yml`](.github/workflows/keep-demo-alive.yml)) pings the service every 10 minutes so data keeps flowing, and runs the overheat demo once an hour so the incident charts are not empty.
+**Datadog dashboard (public, no login):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4), fed by the hosted demo. During 18–19 November 2026, [`keep-demo-alive.yml`](.github/workflows/keep-demo-alive.yml) checks Render every four minutes within each active heartbeat run. GitHub schedules can be delayed, so availability remains best effort. Automatic overheat injection is disabled; judges can trigger the demo themselves.
 
 The hosted demo runs on Render from [`render.yaml`](render.yaml): one free web service (API, workers, dashboard and simulator) plus a free Key Value instance for BullMQ. See [docs/deploy-render.md](docs/deploy-render.md) for the setup steps and limits; the free service sleeps after 15 idle minutes and takes about a minute to wake.
+
+## Datadog Cloud evidence — 18 November 2026
+
+All five monitors have been saved and published on **Datadog US5**. Live Cloud evidence now includes a critical alert and recovery, an indexed application log with a trace ID, and its matching APM trace. See the [verification record and reproduction steps](docs/evidence/2026-11-18/README.md) for timestamps, monitor links and remaining limits.
+
+| Monitor                           | Cloud link                                              |
+| --------------------------------- | ------------------------------------------------------- |
+| Critical threshold, per device    | [23862283](https://us5.datadoghq.com/monitors/23862283) |
+| No sensor ingestion               | [23862290](https://us5.datadoghq.com/monitors/23862290) |
+| Offline devices                   | [23862302](https://us5.datadoghq.com/monitors/23862302) |
+| Slow queue jobs                   | [23862309](https://us5.datadoghq.com/monitors/23862309) |
+| Incident duration over 30 seconds | [23862324](https://us5.datadoghq.com/monitors/23862324) |
+
+![Critical monitor in ALERT on Datadog US5](docs/evidence/2026-11-18/monitor-critical-alert.jpg)
+
+![Indexed application log correlated with an APM trace](docs/evidence/2026-11-18/log-trace-correlation.jpg)
+
+![Actual APM trace showing the API, BullMQ processing and MongoDB queries](docs/evidence/2026-11-18/apm-trace.jpg)
+
+**Evidence scope:** the APM trace and Agent-collected log above come from the local Windows rehearsal connected to US5, tagged `evidence_origin:local_agent_rehearsal`. The Render service sends custom metrics and application event logs directly; APM remains disabled in its current free-service configuration. Monitor, Logs and APM detail links require access to the Datadog organization; the public dashboard and repository images can be viewed without a Datadog login. A published monitor does not prove that every failure condition or notification integration has been exercised.
 
 ## Run locally
 

@@ -2,7 +2,9 @@
 
 Thư mục này chứa dashboard và monitor mẫu. Cả hai chỉ dùng metric mà `packages/api` thật sự gửi lên Datadog.
 
-**Xem dashboard thật (không cần tài khoản Datadog):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4). Dữ liệu đến từ [bản demo trên Render](https://sensorguard-hnnh.onrender.com). Workflow `keep-demo-alive.yml` giữ dịch vụ thức (gọi mỗi 10 phút) và chạy demo quá nhiệt mỗi giờ, nên biểu đồ cảm biến liên tục và các ô cảnh báo, sự cố luôn có dữ liệu.
+**Xem dashboard thật (không cần tài khoản Datadog):** [SensorGuard — Giám sát vận hành](https://p.us5.datadoghq.com/sb/e5ad17af-dbf4-11f1-b42f-ee5a36c85258-ea6401425bf74119e12bb0497cfb00b4). Dữ liệu đến từ [bản demo trên Render](https://sensorguard-hnnh.onrender.com). Trong ngày 18–19/11/2026, workflow `keep-demo-alive.yml` kiểm tra mỗi bốn phút trong từng job heartbeat đang chạy; lịch GitHub có thể trễ. Demo quá nhiệt chỉ chạy khi người dùng yêu cầu.
+
+**Đã triển khai 5 monitor lên US5 ngày 18/11/2026.** Xem [biên bản kiểm chứng, ảnh Monitor/Logs/APM và giới hạn nguồn dữ liệu](../docs/evidence/2026-11-18/README.md). Trace đã được kiểm chứng từ buổi chạy local có Windows Agent; Render hiện chưa bật APM.
 
 ## Cách app gửi dữ liệu
 

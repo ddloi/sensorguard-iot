@@ -5,7 +5,7 @@
       "name": "[SensorGuard] Vượt ngưỡng critical",
       "type": "metric alert",
       "query": "sum(last_5m):sum:sensorguard.sensor.threshold.exceeded{env:development,severity:critical} by {device}.as_count() > 0",
-      "message": "Thiết bị {{device.name}} vừa vượt ngưỡng critical ({{value}} lần trong 5 phút).\n\nSensorGuard tự mở sự cố và chạy khắc phục mô phỏng; theo dõi trạng thái trên dashboard.\n\nThêm @handle nhận thông báo (email, Slack) trước khi bật monitor.",
+      "message": "Thiết bị {{device.name}} vượt ngưỡng critical. Kiểm tra metrics, Logs và APM, đối chiếu nhật ký trước khi kết luận phục hồi.",
       "tags": ["env:development", "service:sensorguard", "team:reliops"],
       "options": {
         "thresholds": {
@@ -14,7 +14,8 @@
         "notify_no_data": false,
         "include_tags": true,
         "renotify_interval": 60,
-        "require_full_window": false
+        "require_full_window": false,
+        "on_missing_data": "default"
       }
     },
     {
@@ -27,11 +28,11 @@
         "thresholds": {
           "critical": 1
         },
-        "notify_no_data": true,
+        "notify_no_data": false,
         "include_tags": true,
         "renotify_interval": 60,
         "require_full_window": false,
-        "no_data_timeframe": 10
+        "on_missing_data": "default"
       }
     },
     {

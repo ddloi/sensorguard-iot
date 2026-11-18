@@ -71,7 +71,9 @@ export function startDeviceHealthWorker(): Worker {
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]);
 
-      for (const { _id: status, count } of statusCounts) {
+      // Emit zero as well so an offline monitor can recover after the last device reconnects.
+      for (const status of ['online', 'warning', 'critical', 'offline', 'maintenance']) {
+        const count = statusCounts.find((group) => group._id === status)?.count ?? 0;
         datadogMetrics.gauge('device.count', count, [`status:${status}`]);
       }
     },

@@ -1,18 +1,20 @@
-# Keeps the hosted demo on Render awake so the simulator keeps sending data
-# to MongoDB and Datadog, and runs the overheat demo once an hour so the
-# incident widgets on the public Datadog dashboard have data.
-# Disable this workflow in GitHub Actions after judging ends.
+# Bounded judging-day heartbeat. GitHub schedules can be delayed; each run
+# keeps checking Render for up to 350 minutes instead of relying on one ping.
 name: Keep live demo awake
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 */4 18,19 11 *'
   workflow_dispatch:
     inputs:
       run_demo:
         description: 'Also run the overheat demo now'
         type: boolean
-        default: true
+        default: false
+
+concurrency:
+  group: sensorguard-judging-heartbeat
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -21,22 +23,39 @@ env:
 
 jobs:
   ping:
-    name: Wake Render and run hourly demo
+    name: Keep Render available during judging
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 360
     steps:
       - name: Wake the service
-        run: curl -fsS --retry 6 --retry-delay 20 --retry-all-errors --max-time 90 "$DEMO_URL/health"
+        run: curl -fsS --retry 3 --retry-delay 20 --retry-all-errors --max-time 90 "$DEMO_URL/health"
 
-      - name: Run the overheat demo (once an hour)
+      - name: Run the overheat demo only when explicitly requested
         env:
           MANUAL_DEMO: ${{ github.event_name == 'workflow_dispatch' && inputs.run_demo }}
         run: |
-          minute=$(date -u +%M)
-          if [ "$MANUAL_DEMO" = "true" ] || [ "$((10#$minute))" -lt 10 ]; then
-            curl -fsS -X POST --max-time 30 "$DEMO_URL/api/demo/overheat"
-            echo
-            echo "Overheat demo triggered at $(date -u +%H:%M) UTC"
-          else
-            echo "Skip demo this run (minute $minute)"
+          if [ "$MANUAL_DEMO" = "true" ]; then
+            curl -fsS -X POST -H 'Content-Type: application/json' -d '{}' --max-time 30 "$DEMO_URL/api/demo/overheat"
           fi
+
+      - name: Check every four minutes until the judging cutoff
+        shell: bash
+        run: |
+          cutoff=$(date -u -d '2026-11-19 17:00:00 UTC' +%s)
+          start=$(date -u -d '2026-11-17 17:00:00 UTC' +%s)
+          now=$(date -u +%s)
+          if (( now < start || now >= cutoff )); then
+            echo 'Outside the 18–19 November 2026 judging window; no persistent heartbeat.'
+            exit 0
+          fi
+          end=$((now + 350 * 60))
+          if (( end > cutoff )); then end=$cutoff; fi
+          while (( $(date -u +%s) < end )); do
+            curl -fsS --retry 2 --retry-delay 15 --retry-all-errors --max-time 90 "$DEMO_URL/health"
+            curl -fsS --max-time 90 -o /dev/null "$DEMO_URL/"
+            echo " Healthy at $(date -u +%FT%TZ)"
+            remaining=$((end - $(date -u +%s)))
+            if (( remaining <= 0 )); then break; fi
+            if (( remaining > 240 )); then remaining=240; fi
+            sleep "$remaining"
+          done
